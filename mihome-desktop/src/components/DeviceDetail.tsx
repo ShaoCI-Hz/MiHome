@@ -196,17 +196,25 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
   const expanded = spec ? expandSpec(spec) : null;
   const extra = (device.extra ?? {}) as Record<string, unknown>;
 
+  // 退场：先播 280ms 动画再真正卸载
+  const [closing, setClosing] = useState(false);
+  const requestClose = () => {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 280);
+  };
+
   return (
     <div
-      className="mi-detail-overlay"
+      className={`mi-detail-overlay ${closing ? 'closing' : ''}`}
       onClick={(e) => {
         e.stopPropagation();
-        onClose();
+        requestClose();
       }}
     >
-      <div className="mi-detail" onClick={(e) => e.stopPropagation()}>
+      <div className={`mi-detail ${closing ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
         <header className="mi-detail-header">
-          <button className="mi-back" onClick={onClose}>‹ 返回</button>
+          <button className="mi-back" onClick={requestClose}>‹ 返回</button>
           <span>设备详情</span>
           <span className={`mi-dot ${device.isOnline ? 'on' : ''}`} />
         </header>

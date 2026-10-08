@@ -248,17 +248,18 @@ export function Home() {
               </select>
             </div>
           </nav>
-          <main className="mi-content">
+          <main className="mi-content" key={`d-${tab}-${roomIdx}`}>
             {loading && devices.length === 0 ? (
               <div className="mi-empty">加载设备中…</div>
             ) : sorted.length === 0 ? (
               <div className="mi-empty">该房间没有设备</div>
             ) : (
               <div className="mi-grid">
-                {sorted.map((d) => (
+                {sorted.map((d, i) => (
                   <DeviceCard
                     key={d.did}
                     device={d}
+                    index={i}
                     editing={editing}
                     onLongPress={() => setEditing(true)}
                     checked={selected.has(d.did)}
@@ -289,7 +290,7 @@ export function Home() {
 
       {/* ===== 场景页 ===== */}
       {tab === 'scenes' && (
-        <main className="mi-content">
+        <main className="mi-content" key="scenes">
           <div className="mi-section-title">手动场景</div>
           {scenes.length === 0 ? (
             <div className="mi-empty">
@@ -314,7 +315,7 @@ export function Home() {
 
       {/* ===== 我的 ===== */}
       {tab === 'me' && (
-        <main className="mi-content">
+        <main className="mi-content" key="me">
           <div className="mi-profile">
             <div className="mi-avatar">👤</div>
             <div className="mi-profile-info">

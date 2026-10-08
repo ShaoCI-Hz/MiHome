@@ -1,5 +1,5 @@
 /** 设备卡片（仿米家 App）：官方产品图 + 分型卡片（传感大数字/亮度滑条/普通）+ 圆形电源钮 */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { MiDevice } from '../api/types';
 import { extractControls, getDeviceImage, getSpec, type ControlDesc } from '../api/spec';
@@ -69,6 +69,7 @@ export function DeviceCard({
   draggable,
   onDragStartDid,
   onDropDid,
+  index,
 }: {
   device: MiDevice;
   editing?: boolean;
@@ -78,6 +79,8 @@ export function DeviceCard({
   draggable?: boolean;
   onDragStartDid?: () => void;
   onDropDid?: () => void;
+  /** 网格中的序号（入场 stagger 用） */
+  index?: number;
 }) {
   const api = useApp((s) => s.api);
   const [img, setImg] = useState<string | null>(null);
@@ -229,6 +232,9 @@ export function DeviceCard({
     return `${String(v)}${suffix}`;
   };
 
+  // 控件区开合（大卡常显）
+  const detailOpen = expanded || size === 'l';
+
   const sensorUnit = (c?: ControlDesc) => {
     if (!c) return '';
     if (/temperature/i.test(c.urn)) return '°C';
@@ -239,6 +245,7 @@ export function DeviceCard({
   return (
     <div
       className={`mi-card mi-card--${variant} mi-card--size-${size} ${device.isOnline ? '' : 'offline'} ${expanded ? 'expanded' : ''} ${editing ? 'editing' : ''} ${checked ? 'checked' : ''}`}
+      style={{ '--card-i': index ?? 0 } as CSSProperties}
       draggable={draggable}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
@@ -349,9 +356,13 @@ export function DeviceCard({
         </div>
       )}
 
-      {/* 大卡常显控件区；中小卡点击展开 */}
-      {(expanded || size === 'l') && (
-        <div className="mi-card-detail" onClick={(e) => e.stopPropagation()}>
+      {/* 控件区：常渲染 + grid-rows 平滑展开/收起；大卡常显 */}
+      <div
+        className={`mi-card-detail ${detailOpen ? 'is-open' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        aria-hidden={!detailOpen}
+      >
+        <div className="mi-card-detail-inner">
           {controls === null && <div className="mi-card-loading">加载控件…</div>}
           {controls !== null && controls.length === 0 && (
             <div className="mi-card-loading">该设备暂无可用控件</div>
@@ -432,7 +443,7 @@ export function DeviceCard({
           </div>
           {err && <div className="mi-card-error">{err}</div>}
         </div>
-      )}
+      </div>
 
       {showDetail &&
         createPortal(

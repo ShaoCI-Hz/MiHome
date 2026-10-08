@@ -429,7 +429,9 @@ button {
   z-index: 50;
   display: flex;
   justify-content: flex-end;
+  animation: overlay-in 0.26s var(--mi-ease-out);
 }
+.mi-detail-overlay.closing { animation: overlay-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
 .mi-detail {
   width: min(440px, 92vw);
   height: 100%;
@@ -437,11 +439,24 @@ button {
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  animation: slideIn 0.22s ease;
+  animation: panel-in 0.34s var(--mi-ease-page);
 }
-@keyframes slideIn {
-  from { transform: translateX(40px); opacity: 0; }
-  to { transform: none; opacity: 1; }
+.mi-detail.closing { animation: panel-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes panel-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes panel-out { from { transform: none; } to { transform: translateX(100%); } }
+/* 详情区块依次入场（仅前 4 个，行级不动画） */
+.mi-detail-body > * {
+  animation: section-in 0.3s var(--mi-ease-out) backwards;
+}
+.mi-detail-body > *:nth-child(1) { animation-delay: 0.02s; }
+.mi-detail-body > *:nth-child(2) { animation-delay: 0.06s; }
+.mi-detail-body > *:nth-child(3) { animation-delay: 0.1s; }
+.mi-detail-body > *:nth-child(n + 4) { animation-delay: 0.14s; }
+@keyframes section-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
 .mi-detail-header {
   display: flex;
@@ -892,15 +907,35 @@ button {
   text-align: right;
 }
 
-/* 展开的控件区 */
+/* 展开的控件区：常渲染 + grid-rows 平滑开合（不动画 height） */
 .mi-card-detail {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #f0f1f3;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s var(--mi-ease-out);
+}
+.mi-card-detail.is-open { grid-template-rows: 1fr; }
+.mi-card-detail-inner {
+  overflow: hidden;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f1f3;
+  opacity: 1;
+  transition: opacity 0.2s var(--mi-ease-out) 0.06s;
 }
+.mi-card-detail:not(.is-open) .mi-card-detail-inner {
+  opacity: 0;
+  transition: opacity 0.12s;
+  /* 收起后不可聚焦/点不到 */
+  visibility: hidden;
+  transition: opacity 0.12s, visibility 0s 0.28s;
+}
+/* 大卡常显：无开合动画 */
+.mi-card--size-l .mi-card-detail { transition: none; }
+[data-theme='dark'] .mi-card-detail-inner { border-top-color: #323338; }
 .mi-card-loading {
   font-size: 12px;
   color: var(--mi-sub);
@@ -1284,4 +1319,50 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================================
+   批次3：页面转场 / 网格入场 / 浮层弹入
+   ============================================================ */
+/* Tab 面板入场（main 带 key，切换时重挂载重放） */
+.mi-content { animation: panel-fade 0.32s var(--mi-ease-page); }
+@keyframes panel-fade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 卡片网格 stagger 入场（cap 8 张，避免同时创建过多合成层） */
+.mi-grid .mi-card {
+  animation: card-in 0.36s var(--mi-ease-out) backwards;
+  animation-delay: calc(min(var(--card-i, 0), 8) * 40ms);
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 搜索栏弹入 */
+.mi-search-bar { animation: search-in 0.24s var(--mi-ease-out); }
+@keyframes search-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 批量浮条弹入（米家轻弹） */
+.mi-batch-bar { animation: bar-in 0.32s var(--mi-ease-spring); }
+@keyframes bar-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 勾选角标弹入 + 选中描边（box-shadow 可平滑过渡，outline 不可） */
+.mi-check.on { animation: check-pop 0.26s var(--mi-ease-spring); }
+@keyframes check-pop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+.mi-card.checked {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--mi-blue), var(--mi-shadow);
+  transition: box-shadow 0.15s var(--mi-ease-out);
 }

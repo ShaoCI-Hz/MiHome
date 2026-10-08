@@ -38,36 +38,34 @@ fn delete_auth() -> Result<(), String> {
     }
 }
 
-/// 【开发诊断专用】读取外部测试凭据文件（验证请求构造用），开源发布前移除
-#[tauri::command]
-fn read_diag_auth() -> Result<Option<String>, String> {
-    let p = std::path::Path::new(
-        r"C:\Users\HeZi\AppData\Local\Temp\mihome-probe\auth.json",
-    );
-    if p.exists() {
-        std::fs::read_to_string(p).map(Some).map_err(|e| e.to_string())
-    } else {
-        Ok(None)
-    }
-}
-
-/// 追加一行日志到文件（前端各环节插桩，开发自测用）
+/// 追加一行日志到文件（开发自测用；发布包中 manifest 路径无效时回退到临时目录）
 #[tauri::command]
 fn log_write(line: String) -> Result<(), String> {
     use std::io::Write;
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../logs");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("app.log");
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| e.to_string())?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    writeln!(f, "[{ts}] {line}").map_err(|e| e.to_string())
+    let candidates = [
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../logs"),
+        std::env::temp_dir().join("mihome-desktop-logs"),
+    ];
+    let mut last_err = String::new();
+    for dir in &candidates {
+        if std::fs::create_dir_all(dir).is_err() {
+            continue;
+        }
+        let path = dir.join("app.log");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            return writeln!(f, "[{ts}] {line}").map_err(|e| e.to_string());
+        }
+        last_err = format!("open {} failed", path.display());
+    }
+    Err(last_err)
 }
 
 /// 带 Set-Cookie 提取的 GET 请求（JS 侧读不到 Set-Cookie，登录回调必须走这里）。
@@ -144,6 +142,15 @@ async fn mi_fetch(
         Ok(u) => u,
         Err(e) => return Err(format!("invalid url: {e}")),
     };
+    // SSRF 防护：仅允许小米系域名（登录回调/刷新的实际域）
+    {
+        let host = current.host_str().unwrap_or_default().to_lowercase();
+        const ALLOWED: [&str; 3] = ["xiaomi.com", "mijia.tech", "mi.com"];
+        let ok = ALLOWED.iter().any(|d| host == *d || host.ends_with(&format!(".{d}")));
+        if !ok {
+            return Err(format!("host not allowed: {host}"));
+        }
+    }
     let mut jar: Vec<Ck> = Vec::new();
     let mut hops: Vec<String> = Vec::new();
     let mut final_status = 0u16;
@@ -282,7 +289,6 @@ pub fn run() {
             load_auth,
             delete_auth,
             mi_fetch,
-            read_diag_auth,
             log_write
         ])
         .run(tauri::generate_context!())

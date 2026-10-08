@@ -40,6 +40,31 @@ interface AppState {
 export const useApp = create<AppState>((set, get) => {
   const client = new MiClient();
   const api = new MiHomeApi(client);
+  /** 扫码长轮询取消器：重新获取二维码/退出登录时中止旧轮询，避免并发登录 */
+  let loginAbort: AbortController | null = null;
+
+  const cancelLoginPoll = () => {
+    loginAbort?.abort();
+    loginAbort = null;
+  };
+
+  /**
+   * 加载家庭数据并进入主界面。
+   * 失败回退登录页并展示错误，避免“ready 但空白无提示”状态。
+   */
+  const loadHomes = async () => {
+    try {
+      const homes = await api.getHomesList();
+      log('loadHomes 成功, homes=', homes.length);
+      set({ homes, currentHomeId: homes[0] ? String(homes[0].id) : null });
+      if (homes[0]) await get().selectHome(String(homes[0].id));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log('loadHomes 失败 -', msg);
+      set({ phase: 'login', loading: false, error: `加载数据失败: ${msg}` });
+    }
+  };
+
   return {
     phase: 'loading',
     client,
@@ -55,34 +80,6 @@ export const useApp = create<AppState>((set, get) => {
 
     init: async () => {
       log('init: 启动');
-      // 【开发诊断】优先用已验证的测试凭据跑一次，验证请求构造是否正确
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const test = await invoke<string | null>('read_diag_auth');
-        if (test) {
-          client.auth = JSON.parse(test);
-          log('diag: 测试凭据已加载, keys=', Object.keys(client.auth).join(','));
-          const ok = await client.checkAvailable();
-          log('diag: check_new_msg =>', ok, '|', client.lastDiag);
-          if (ok) {
-            const homes = await api.getHomesList();
-            log('diag: getHomesList 成功, homes=', homes.length);
-            set({
-              phase: 'ready',
-              homes,
-              currentHomeId: homes[0] ? String(homes[0].id) : null,
-            });
-            if (homes[0]) await get().selectHome(String(homes[0].id));
-            return;
-          }
-          set({ error: `[诊断] 请求构造验证失败: ${client.lastDiag}` });
-        } else {
-          log('diag: 无测试凭据文件');
-        }
-      } catch (e) {
-        log('diag: 跳过 -', e);
-      }
-
       try {
         const auth = await loadAuth();
         log('loadAuth:', auth ? `有保存凭据 keys=${Object.keys(auth).join(',')}` : '无');
@@ -91,14 +88,8 @@ export const useApp = create<AppState>((set, get) => {
           const ok = await client.checkAvailable();
           log('已存凭据 checkAvailable =>', ok, '|', client.lastDiag);
           if (ok) {
-            const homes = await api.getHomesList();
-            log('getHomesList 成功, homes=', homes.length);
-            set({
-              phase: 'ready',
-              homes,
-              currentHomeId: homes[0] ? String(homes[0].id) : null,
-            });
-            if (homes[0]) await get().selectHome(String(homes[0].id));
+            set({ phase: 'ready' });
+            await loadHomes();
             return;
           }
         }
@@ -109,14 +100,13 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     beginQrLogin: async () => {
+      cancelLoginPoll(); // 旧轮询作废
       const qr = await client.getQrLoginData();
       if (qr === null) {
         // 静默刷新成功
         await saveAuth(client.auth);
         set({ phase: 'ready' });
-        const homes = await api.getHomesList();
-        set({ homes, currentHomeId: homes[0] ? String(homes[0].id) : null });
-        if (homes[0]) await get().selectHome(String(homes[0].id));
+        await loadHomes();
         return '';
       }
       set({ lastQrData: qr });
@@ -124,22 +114,29 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     confirmQrLogin: async (qr) => {
+      cancelLoginPoll();
+      const ac = new AbortController();
+      loginAbort = ac;
       set({ loading: true, error: null });
       log('qr: 长轮询等待扫码…');
       try {
-        await client.completeQrLogin(qr);
+        await client.completeQrLogin(qr, ac.signal);
         log('qr: 登录完成, auth keys=', Object.keys(client.auth).join(','));
         await saveAuth(client.auth);
         log('qr: 凭据已保存');
         set({ phase: 'ready', loading: false });
-        const homes = await api.getHomesList();
-        log('qr: getHomesList 成功, homes=', homes.length);
-        set({ homes, currentHomeId: homes[0] ? String(homes[0].id) : null });
-        if (homes[0]) await get().selectHome(String(homes[0].id));
+        await loadHomes();
       } catch (e) {
+        if (ac.signal.aborted) {
+          log('qr: 已取消（重新获取二维码或退出）');
+          set({ loading: false });
+          return;
+        }
         log('qr: 失败 -', e, '| diag=', client.lastDiag);
         set({ loading: false, error: e instanceof Error ? e.message : String(e) });
         throw e;
+      } finally {
+        if (loginAbort === ac) loginAbort = null;
       }
     },
 
@@ -176,6 +173,7 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     logout: async () => {
+      cancelLoginPoll();
       await deleteAuth();
       client.auth = {};
       client.invalidateAvailable();

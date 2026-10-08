@@ -234,17 +234,20 @@ export class MiClient {
    * @param qrData getQrLoginData 的返回
    * @param onTimeout 轮询超时回调（用于 UI 提示）
    */
-  async completeQrLogin(qrData: QrLoginData): Promise<void> {
+  async completeQrLogin(qrData: QrLoginData, external?: AbortSignal): Promise<void> {
     let lpData: QrLoginResult;
+    // 2 分钟扫码窗口 + 外部取消（重新获取二维码/退出登录时中止）
+    const signals = [AbortSignal.timeout(120000)];
+    if (external) signals.push(external);
     try {
-      // 给用户 2 分钟扫码时间
       const res = await fetch(qrData.lp, {
         headers: this.plainHeaders(),
-        signal: AbortSignal.timeout(120000),
+        signal: AbortSignal.any(signals),
       });
       if (!res.ok) throw new MiLoginError(res.status, await res.text());
       lpData = parseServiceRet(await res.text()) as unknown as QrLoginResult;
     } catch (e) {
+      if (external?.aborted) throw e; // 取消：原样抛出供上层识别
       if (e instanceof MiLoginError) throw e;
       throw new MiLoginError(-1, `扫码超时或网络错误，请重试（${e instanceof Error ? e.message : e}）`);
     }
@@ -282,7 +285,12 @@ export class MiClient {
 
   async checkAvailable(): Promise<boolean> {
     if (!this.auth.ssecurity || !this.auth.serviceToken) {
-      this.lastDiag = `missing cred: ssecurity=${this.auth.ssecurity ? 'Y' : 'N'} serviceToken=${this.auth.serviceToken ? 'Y' : 'N'} userId=${this.auth.userId ?? '-'} cUserId=${this.auth.cUserId ?? '-'}`;
+      // 脱敏：ID 只保留前后 2 位
+      const mask = (s?: string) => {
+        const v = s ?? '-';
+        return v.length <= 4 ? '**' : `${v.slice(0, 2)}**${v.slice(-2)}`;
+      };
+      this.lastDiag = `missing cred: ssecurity=${this.auth.ssecurity ? 'Y' : 'N'} serviceToken=${this.auth.serviceToken ? 'Y' : 'N'} userId=${mask(this.auth.userId)} cUserId=${mask(this.auth.cUserId)}`;
       return false;
     }
     const now = Date.now();

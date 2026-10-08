@@ -66,13 +66,14 @@ export function Home() {
 
   // 批量开/关（对选中且含开关控件的在线设备）
   const batchSet = async (value: boolean) => {
-    const { api } = useApp.getState();
     setBatchBusy(true);
     let ok = 0;
     let fail = 0;
     let skip = 0;
     for (const did of selected) {
-      const d = devices.find((x) => x.did === did);
+      // 每轮从 store 取最新设备列表，避免轮询刷新后的陈旧闭包
+      const { api, devices: latest } = useApp.getState();
+      const d = latest.find((x) => x.did === did);
       if (!d || !d.isOnline) {
         skip += 1;
         continue;

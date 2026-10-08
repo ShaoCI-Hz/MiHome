@@ -22,7 +22,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.xiaomi.com https://*.mijia.tech; connect-src 'self' http://localhost:1420 ws://localhost:1420 https://*.xiaomi.com https://*.mijia.tech https://*.mi.com https://home.miot-spec.com; object-src 'none'; base-uri 'self'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.xiaomi.com https://*.mijia.tech; connect-src 'self' http://localhost:1420 ws://localhost:1420 https://*.xiaomi.com https://*.mijia.tech https://*.mi.com https://home.miot-spec.com"
     }
   },
   "bundle": {

@@ -1,0 +1,8 @@
+# 仓库级忽略
+# Python 虚拟环境
+.venv/
+# Reasonix 会话目录（非项目内容）
+MiHome/
+# 日志
+logs/
+*.log

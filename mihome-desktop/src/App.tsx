@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useApp } from './api/store';
 import { applyTheme } from './api/prefs';
+import { schedulePropsFetch } from './api/propsStore';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { ToastHost } from './components/Toast';
@@ -23,15 +24,24 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  // 设备列表自动轮询：60 秒刷新在线状态（后台标签页暂停）
+  // 统一轮询：60 秒刷设备列表 + 批量刷属性；窗口恢复可见时立即刷一轮
   useEffect(() => {
     if (phase !== 'ready') return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        useApp.getState().refresh().catch(() => undefined);
-      }
-    }, 60000);
-    return () => clearInterval(timer);
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      const { refresh, devices } = useApp.getState();
+      refresh().catch(() => undefined);
+      schedulePropsFetch(devices.map((d) => d.did));
+    };
+    const timer = setInterval(tick, 60000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [phase]);
 
   const screen =

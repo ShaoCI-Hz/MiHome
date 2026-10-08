@@ -85,22 +85,22 @@ export class MiHomeApi {
     return out;
   }
 
-  /** 手动场景列表 */
-  async getScenesList(homeId?: string): Promise<MiScene[]> {
+  /** 手动场景列表（可传入 homes 避免重复拉取家庭列表） */
+  async getScenesList(homeId?: string, homes?: MiHome[]): Promise<MiScene[]> {
     if (homeId === undefined) {
-      const homes = await this.getHomesList();
+      const list = homes ?? (await this.getHomesList());
       const out: MiScene[] = [];
-      for (const h of homes) out.push(...(await this.getScenesList(String(h.id))));
+      for (const h of list) out.push(...(await this.getScenesList(String(h.id), list)));
       return out;
     }
-    const homes = await this.getHomesList();
+    const list = homes ?? (await this.getHomesList());
     const ret = (await this.client.request(
       '/appgateway/miot/appsceneservice/AppSceneService/GetSimpleSceneList',
       {
         app_version: 12,
         get_type: 2,
         home_id: String(homeId),
-        owner_uid: this.homeOwner(homes, homeId),
+        owner_uid: this.homeOwner(list, homeId),
       },
     )) as { manual_scene_info_list?: MiScene[] };
     const scenes = ret?.manual_scene_info_list ?? [];

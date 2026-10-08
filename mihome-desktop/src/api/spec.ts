@@ -46,23 +46,33 @@ export interface DeviceSpec {
 const cache = new Map<string, DeviceSpec>();
 const imageCache = new Map<string, string | null>();
 const htmlCache = new Map<string, string | null>();
+/** 在途请求去重：并发调用同 URL（规格+产品图同时触发）只发一次 */
+const pendingHtml = new Map<string, Promise<string | null>>();
 
-/** 抓取 miot-spec 页面 HTML（带缓存，image/spec 共用） */
-async function fetchSpecPage(url: string): Promise<string | null> {
-  if (htmlCache.has(url)) return htmlCache.get(url) ?? null;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
+/** 抓取 miot-spec 页面 HTML（带缓存与在途去重，image/spec 共用） */
+function fetchSpecPage(url: string): Promise<string | null> {
+  if (htmlCache.has(url)) return Promise.resolve(htmlCache.get(url) ?? null);
+  const inflight = pendingHtml.get(url);
+  if (inflight) return inflight;
+  const p = (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        htmlCache.set(url, null);
+        return null;
+      }
+      const html = await res.text();
+      htmlCache.set(url, html);
+      return html;
+    } catch {
       htmlCache.set(url, null);
       return null;
+    } finally {
+      pendingHtml.delete(url);
     }
-    const html = await res.text();
-    htmlCache.set(url, html);
-    return html;
-  } catch {
-    htmlCache.set(url, null);
-    return null;
-  }
+  })();
+  pendingHtml.set(url, p);
+  return p;
 }
 
 function urnTail(type: string): string {

@@ -1,5 +1,5 @@
 /** 主界面（仿米家 App）：顶栏家庭切换 + 房间标签 + 设备网格 + 底部导航 */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../api/store';
 import { DeviceCard } from '../components/DeviceCard';
 import { log } from '../api/log';
@@ -30,6 +30,7 @@ export function Home() {
   const [editing, setEditing] = useState(false); // 卡片尺寸编辑模式
   const [searching, setSearching] = useState(false); // 搜索框展开
   const [query, setQuery] = useState('');
+  const [orderTick, setOrderTick] = useState(0); // 拖拽保存后触发重排
   const [theme, setTheme] = useState<ThemePref>(() => getThemePref());
   const [autostart, setAutostart] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -108,16 +109,20 @@ export function Home() {
     ? devices.filter((d) => room.didlist!.includes(d.did))
     : devices;
 
-  // 关键词过滤（名称/型号）
+  // 关键词过滤（名称/型号）——memo 化，避免每次渲染重算
   const q = query.trim().toLowerCase();
-  const filtered = q
-    ? shown.filter(
-        (d) => d.name.toLowerCase().includes(q) || d.model.toLowerCase().includes(q),
-      )
-    : shown;
+  const filtered = useMemo(
+    () =>
+      q
+        ? shown.filter(
+            (d) => d.name.toLowerCase().includes(q) || d.model.toLowerCase().includes(q),
+          )
+        : shown,
+    [shown, q],
+  );
 
   // 排序：在线优先 / 按名称 / 按类型 / 自定义拖拽顺序
-  const sorted = (() => {
+  const sorted = useMemo(() => {
     if (sortMode === 'order') return applyOrder(homeId, filtered);
     return [...filtered].sort((a, b) => {
       if (sortMode === 'online') {
@@ -130,7 +135,9 @@ export function Home() {
       const tb = b.model.split('.')[1] ?? '';
       return ta.localeCompare(tb) || a.name.localeCompare(b.name, 'zh');
     });
-  })();
+    // orderTick：拖拽保存自定义顺序后（sortMode 不变）强制重排
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, sortMode, homeId, orderTick]);
 
   // 拖拽落位：更新自定义顺序并切换到"自定义"排序
   const handleDrop = (draggedDid: string, targetDid: string) => {
@@ -138,6 +145,7 @@ export function Home() {
     const next = reorderList(sorted, draggedDid, targetDid);
     setOrder(homeId, next.map((d) => d.did));
     setSortMode('order');
+    setOrderTick((v) => v + 1);
     log('拖拽排序已保存', draggedDid, '→', targetDid);
   };
 

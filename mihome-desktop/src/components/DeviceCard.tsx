@@ -1,9 +1,10 @@
 /** 设备卡片（仿米家 App）：官方产品图 + 分型卡片（传感大数字/亮度滑条/普通）+ 圆形电源钮 */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { MiDevice, PropKey, PropValue } from '../api/types';
+import type { MiDevice } from '../api/types';
 import { extractControls, getDeviceImage, getSpec, type ControlDesc } from '../api/spec';
 import { getDisplayName } from '../api/prefs';
+import { schedulePropsFetch, setPropValue, useDidValues } from '../api/propsStore';
 import { useApp } from '../api/store';
 import { DeviceDetail } from './DeviceDetail';
 
@@ -81,7 +82,8 @@ export function DeviceCard({
   const api = useApp((s) => s.api);
   const [img, setImg] = useState<string | null>(null);
   const [controls, setControls] = useState<ControlDesc[] | null>(null);
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  // 属性值改由中心化仓库提供（批量拉取 + 统一轮询）
+  const values = useDidValues(device.did);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -133,75 +135,33 @@ export function DeviceCard({
     };
   }, [device.model]);
 
-  // 规格 + 当前值
-  const loadProps = useCallback(async () => {
-    if (!device.model) return;
+  // 规格加载：控件来自 spec，属性值交由调度器批量拉取（O(N)→O(1)）
+  const loadControls = useCallback(async () => {
+    if (!device.model) {
+      setControls([]);
+      return;
+    }
     const spec = await getSpec(device.model);
     const ctrls = spec ? extractControls(spec) : [];
     setControls(ctrls);
-    if (ctrls.length) {
-      try {
-        const keys: PropKey[] = ctrls.map((c) => ({ did: device.did, siid: c.siid, piid: c.piid }));
-        const ret = (await api.getDevicesProp(keys)) as PropValue[];
-        const map: Record<string, unknown> = {};
-        for (const r of ret) if (r.code === 0 || r.code === 1) map[`${r.siid}.${r.piid}`] = r.value;
-        setValues(map);
-      } catch {
-        /* 忽略读取失败 */
-      }
-    }
-  }, [api, device.did, device.model]);
+    if (ctrls.length) schedulePropsFetch([device.did]);
+  }, [device.did, device.model]);
 
-  // 首次加载
+  // 首次加载（规格 → 控件 → 交调度器批量拉值）
   useEffect(() => {
-    let dead = false;
-    (async () => {
-      if (!device.model) {
-        setControls([]);
-        return;
-      }
-      const spec = await getSpec(device.model);
-      if (dead) return;
-      const ctrls = spec ? extractControls(spec) : [];
-      setControls(ctrls);
-      if (ctrls.length) {
-        try {
-          const keys: PropKey[] = ctrls.map((c) => ({ did: device.did, siid: c.siid, piid: c.piid }));
-          const ret = (await api.getDevicesProp(keys)) as PropValue[];
-          if (dead) return;
-          const map: Record<string, unknown> = {};
-          for (const r of ret) if (r.code === 0 || r.code === 1) map[`${r.siid}.${r.piid}`] = r.value;
-          setValues(map);
-        } catch {
-          /* 忽略读取失败 */
-        }
-      }
-    })();
-    return () => {
-      dead = true;
-    };
-  }, [device.did, device.model, api]);
-
-  // 自动轮询：60 秒刷新属性（后台标签页暂停）
-  useEffect(() => {
-    if (!controls?.length) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadProps();
-    }, 60000);
-    return () => clearInterval(timer);
-  }, [controls, loadProps]);
+    void loadControls();
+  }, [loadControls]);
 
   const setValue = useCallback(
     async (c: ControlDesc, value: unknown) => {
-      const key = `${c.siid}.${c.piid}`;
-      const prev = values[key];
-      setValues((v) => ({ ...v, [key]: value }));
+      const prev = values[`${c.siid}.${c.piid}`];
+      setPropValue(device.did, c.siid, c.piid, value); // 乐观回显
       setBusy(true);
       setErr(null);
       try {
         await api.setDevicesProp({ did: device.did, siid: c.siid, piid: c.piid, value });
       } catch (e) {
-        setValues((v) => ({ ...v, [key]: prev }));
+        setPropValue(device.did, c.siid, c.piid, prev); // 回滚
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
         setBusy(false);

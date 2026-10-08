@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { MiClient } from './client';
 import { MiHomeApi } from './mijia';
 import { deleteAuth, loadAuth, saveAuth } from './storage';
+import { schedulePropsFetch } from './propsStore';
 import { log } from './log';
 import type { MiDevice, MiHome, MiRoom, MiScene, QrLoginData } from './types';
 
@@ -145,8 +146,11 @@ export const useApp = create<AppState>((set, get) => {
       try {
         const { homes } = get();
         const home = homes.find((h) => String(h.id) === homeId);
-        const devices = await api.getDevicesList(homeId, homes);
-        const scenes = await api.getScenesList(homeId).catch(() => []);
+        // 设备与场景并行拉取（此前串行多等一整个场景请求）
+        const [devices, scenes] = await Promise.all([
+          api.getDevicesList(homeId, homes),
+          api.getScenesList(homeId, homes).catch(() => []),
+        ]);
         log('selectHome: devices=', devices.length, 'scenes=', scenes.length, 'rooms=', home?.roomlist?.length ?? 0);
         set({
           devices,
@@ -154,6 +158,8 @@ export const useApp = create<AppState>((set, get) => {
           currentRooms: home?.roomlist ?? [],
           loading: false,
         });
+        // 列表就绪后立即批量拉一轮属性（并接管后续轮询）
+        schedulePropsFetch(devices.map((d) => d.did));
       } catch (e) {
         log('selectHome 失败 -', e);
         set({ loading: false, error: e instanceof Error ? e.message : String(e) });

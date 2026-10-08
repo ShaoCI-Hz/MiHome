@@ -1,9 +1,33 @@
 /** 设备详情页（全屏浮层）：完整属性/动作 + 设备信息，对齐米家设备详情 */
 import { useEffect, useState } from 'react';
 import type { MiDevice, PropValue } from '../api/types';
-import { getSpec, type ControlDesc, type DeviceSpec } from '../api/spec';
+import { findEnergyKey, getSpec, type ControlDesc, type DeviceSpec } from '../api/spec';
 import { getDisplayName, setDisplayName } from '../api/prefs';
 import { useApp } from '../api/store';
+
+/** 解析统计值：value 是 "[123.4]" 形式的字符串，取第一项 */
+function parseStatValue(raw: string): number {
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length) return Number(arr[0]) || 0;
+  } catch {
+    /* 非法 JSON，走正则 */
+  }
+  const m = raw.match(/-?\d+(\.\d+)?/);
+  return m ? Number(m[0]) : 0;
+}
+
+/** 耗材 details → 展示文本 */
+function fmtConsumable(d: unknown): string {
+  if (d === null || d === undefined) return '';
+  if (typeof d === 'string' || typeof d === 'number') return String(d);
+  if (Array.isArray(d)) return d.length === 1 ? fmtConsumable(d[0]) : JSON.stringify(d);
+  const o = d as Record<string, unknown>;
+  const desc = String(o.description ?? o.consumable_type ?? o.type ?? '');
+  const val = o.value !== undefined ? String(o.value) : '';
+  const line = `${desc} ${val}`.trim();
+  return line || JSON.stringify(o).slice(0, 80);
+}
 
 interface FullProp extends ControlDesc {
   siid: number;
@@ -64,6 +88,50 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dispName, setDispName] = useState(() => getDisplayName(device.did, device.name));
+  const [energy, setEnergy] = useState<{ time: number; v: number }[]>([]);
+  const [consumables, setConsumables] = useState<string[]>([]);
+
+  // 能耗 + 耗材
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      const s = await getSpec(device.model);
+      if (dead || !s) return;
+      const key = findEnergyKey(s);
+      if (key) {
+        try {
+          const now = Math.floor(Date.now() / 1000);
+          const list = await api.getStatistics({
+            did: device.did,
+            key,
+            data_type: 'stat_day_v3',
+            limit: 7,
+            time_start: now - 7 * 86400,
+            time_end: now,
+          });
+          if (dead) return;
+          setEnergy(list.map((it) => ({ time: it.time, v: parseStatValue(it.value) })));
+        } catch {
+          /* 无统计数据 */
+        }
+      }
+      // 耗材（按当前家庭过滤本设备）
+      const homeId = useApp.getState().currentHomeId;
+      if (homeId) {
+        try {
+          const items = await api.getConsumableItems(homeId);
+          if (dead) return;
+          const mine = items.filter((x) => x.did === device.did);
+          setConsumables(mine.map((x) => fmtConsumable(x.details) || x.name || '有耗材需更换'));
+        } catch {
+          /* 无耗材数据 */
+        }
+      }
+    })();
+    return () => {
+      dead = true;
+    };
+  }, [api, device.did, device.model]);
 
   // 本地重命名（不影响云端，仅本软件内显示）
   const rename = () => {
@@ -173,6 +241,42 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
               <div><span>型号</span><b>{device.model}</b></div>
             </div>
           </div>
+
+          {/* 用电统计（设备具备能耗属性时显示） */}
+          {energy.length > 0 && (
+            <div className="mi-detail-section">
+              <div className="mi-detail-title">近 7 天用电（Wh）</div>
+              <div className="mi-chart">
+                {(() => {
+                  const max = Math.max(...energy.map((x) => x.v), 1);
+                  return energy.map((e) => {
+                    const d = new Date(e.time * 1000);
+                    const h = Math.max(3, Math.round((e.v / max) * 100));
+                    return (
+                      <div className="mi-chart-col" key={e.time}>
+                        <em>{e.v >= 100 ? Math.round(e.v) : e.v.toFixed(1)}</em>
+                        <div className="mi-chart-bar" style={{ height: `${h}%` }} />
+                        <span>{d.getMonth() + 1}/{d.getDate()}</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* 耗材 */}
+          {consumables.length > 0 && (
+            <div className="mi-detail-section">
+              <div className="mi-detail-title">耗材</div>
+              {consumables.map((c, i) => (
+                <div key={i} className="mi-detail-row">
+                  <span>状态</span>
+                  <b>{c}</b>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 全部属性 */}
           <div className="mi-detail-section">

@@ -190,6 +190,21 @@ export async function getSpec(model: string): Promise<DeviceSpec | null> {
   }
 }
 
+/**
+ * 从规格中找能耗属性键（"siid.piid"），如插座的 power-consumption；无则 null
+ */
+export function findEnergyKey(spec: DeviceSpec | null): string | null {
+  if (!spec) return null;
+  const names = ['power-consumption', 'electric-energy', 'energy-consumption', 'power-cost'];
+  for (const svc of spec.services) {
+    for (const p of svc.properties ?? []) {
+      const tail = p.type.split(':').pop() ?? p.type;
+      if (names.includes(tail)) return `${svc.iid}.${p.iid}`;
+    }
+  }
+  return null;
+}
+
 /** 从规格中提取控件描述 */
 export interface ControlDesc {
   siid: number;

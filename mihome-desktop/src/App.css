@@ -597,6 +597,47 @@ button {
   color: var(--mi-blue);
   margin-bottom: 12px;
 }
+
+/* ===== 能耗柱状图 ===== */
+.mi-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 150px;
+  padding-top: 6px;
+}
+.mi-chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 4px;
+  min-width: 0;
+}
+.mi-chart-col em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--mi-sub);
+  white-space: nowrap;
+}
+.mi-chart-bar {
+  width: 70%;
+  max-width: 34px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #5b9cff, var(--mi-blue));
+  min-height: 3px;
+  transition: height 0.3s;
+}
+.mi-chart-col span {
+  font-size: 10px;
+  color: var(--mi-sub);
+  white-space: nowrap;
+}
+[data-theme='dark'] .mi-chart-bar {
+  background: linear-gradient(180deg, #5b9cff, #2f6fe0);
+}
 .mi-detail-note {
   text-align: center;
   font-size: 11px;

@@ -163,4 +163,36 @@ export class MiHomeApi {
       begin_at: beginAt ?? Math.floor(Date.now() / 1000) - 3600,
     });
   }
+
+  /**
+   * 设备能耗统计（如插座用电量）
+   * @param key 属性键 "siid.piid"（如 "7.1"，从 spec 的 power-consumption 属性取）
+   * @param dataType stat_day_v3 / stat_hour_v3 / stat_month_v3 等
+   */
+  async getStatistics(params: {
+    did: string;
+    key: string;
+    data_type: string;
+    limit: number;
+    time_start: number;
+    time_end: number;
+  }): Promise<{ value: string; time: number }[]> {
+    return (await this.client.request('/v2/user/statistics', params)) as {
+      value: string;
+      time: number;
+    }[];
+  }
+
+  /** 耗材列表（滤芯/电池等，按家庭） */
+  async getConsumableItems(homeId: string): Promise<
+    { did: string; name?: string; details?: unknown }[]
+  > {
+    const homes = await this.getHomesList();
+    const ret = (await this.client.request('/v2/home/standard_consumable_items', {
+      home_id: Number(homeId),
+      owner_id: this.homeOwner(homes, homeId),
+      filter_ignore: true,
+    })) as { items?: { consumes_data?: { did: string; name?: string; details?: unknown }[] }[] };
+    return ret.items?.[0]?.consumes_data ?? [];
+  }
 }

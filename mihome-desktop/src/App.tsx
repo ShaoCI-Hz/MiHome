@@ -3,6 +3,7 @@ import { useApp } from './api/store';
 import { applyTheme } from './api/prefs';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
+import { ToastHost } from './components/Toast';
 import './App.css';
 
 export default function App() {
@@ -33,14 +34,21 @@ export default function App() {
     return () => clearInterval(timer);
   }, [phase]);
 
-  if (phase === 'loading') {
-    return (
+  const screen =
+    phase === 'loading' ? (
       <div className="boot">
         <div className="boot-spinner" />
         <p>正在启动…</p>
       </div>
+    ) : phase === 'login' ? (
+      <Login />
+    ) : (
+      <Home />
     );
-  }
-  if (phase === 'login') return <Login />;
-  return <Home />;
+  return (
+    <>
+      {screen}
+      <ToastHost />
+    </>
+  );
 }

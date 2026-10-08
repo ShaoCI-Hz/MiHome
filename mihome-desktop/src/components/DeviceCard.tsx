@@ -331,7 +331,7 @@ export function DeviceCard({
               <em>{sensorUnit(sensorMain)}</em>
             </div>
             <div className="mi-sensor-sub">
-              {device.name}
+              {getDisplayName(device.did, device.name)}
               {sensorSub && (
                 <span className="mi-sensor-side">
                   {sensorSub.label} {fmtVal(sensorSub)}{sensorUnit(sensorSub)}

@@ -12,6 +12,11 @@
   --mi-danger: #fa5151;
   --mi-radius: 16px;
   --mi-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  /* 统一动效令牌（专家方案） */
+  --mi-ease-page: cubic-bezier(0.32, 0.72, 0, 1);
+  --mi-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --mi-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --mi-tap-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 * {
@@ -251,11 +256,14 @@ button {
   background: #fff;
   color: #666;
   box-shadow: var(--mi-shadow);
-  transition: all 0.15s;
+  transition: background-color 0.16s var(--mi-ease-out), color 0.16s var(--mi-ease-out),
+    box-shadow 0.16s var(--mi-ease-out), transform 0.12s var(--mi-tap-ease);
 }
+.mi-rooms button:active { transform: scale(0.94); }
 .mi-rooms button.active {
   background: var(--mi-blue);
   color: #fff;
+  animation: pill-pop 0.24s var(--mi-ease-spring);
 }
 
 /* 内容区 */
@@ -628,7 +636,9 @@ button {
   border-radius: 6px 6px 0 0;
   background: linear-gradient(180deg, #5b9cff, var(--mi-blue));
   min-height: 3px;
-  transition: height 0.3s;
+  /* 不动画 height（每帧重排）；改 scaleY 从底部生长（合成层） */
+  transform-origin: bottom;
+  animation: bar-grow 0.48s var(--mi-ease-out) backwards;
 }
 .mi-chart-col span {
   font-size: 10px;
@@ -752,9 +762,10 @@ button {
   top: 2px;
   left: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: left 0.2s;
+  /* 不动画 left（每帧重排）；位移用 transform（合成层） */
+  transition: transform 0.28s var(--mi-ease-page), box-shadow 0.2s;
 }
-.mi-toggle.on .mi-toggle-knob { left: 20px; }
+.mi-toggle.on .mi-toggle-knob { transform: translateX(18px); }
 [data-theme='dark'] .mi-toggle { background: #3a3b40; }
 
 .mi-card-main {
@@ -810,7 +821,9 @@ button {
   background: #f2f3f5;
   color: #b2b4ba;
   border: 1px solid #e8e9ec;
-  transition: all 0.15s;
+  transition: background-color 0.15s var(--mi-ease-out), color 0.15s var(--mi-ease-out),
+    border-color 0.15s var(--mi-ease-out), transform 0.12s var(--mi-tap-ease),
+    box-shadow 0.15s var(--mi-ease-out);
   padding: 0;
 }
 .mi-power.on {
@@ -1201,3 +1214,74 @@ button {
 [data-theme='dark'] .login-hint { color: var(--mi-sub); }
 /* 二维码区域保持白底（扫码需要高对比） */
 [data-theme='dark'] .qr-box { background: #ffffff; }
+
+/* ============================================================
+   动效基础（批次1 · 三专家方案）
+   ============================================================ */
+@keyframes pill-pop {
+  0% { transform: scale(0.94); }
+  60% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+@keyframes bar-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 全局按压反馈（只动 transform，不触发重排） */
+.mi-card:active:not([draggable='true']) {
+  transform: translateY(-1px) scale(0.985);
+}
+.mi-scene-item:active,
+.mi-cell:active,
+.mi-action-grid button:active:not(:disabled),
+.mi-icon-btn:active:not(:disabled),
+.mi-back:active {
+  transform: scale(0.97);
+}
+.mi-power:active:not(:disabled) { transform: scale(0.9); }
+
+/* ===== Toast ===== */
+.mi-toast-host {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.mi-toast {
+  max-width: min(520px, 86vw);
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(30, 31, 35, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  animation: toast-in 0.26s var(--mi-ease-out);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mi-toast--ok { background: rgba(52, 130, 255, 0.95); }
+.mi-toast--err { background: rgba(250, 81, 81, 0.95); }
+
+/* 无障碍：尊重系统减弱动效设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

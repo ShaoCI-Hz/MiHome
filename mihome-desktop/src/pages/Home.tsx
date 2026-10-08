@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../api/store';
 import { DeviceCard } from '../components/DeviceCard';
 import { log } from '../api/log';
+import { toast } from '../components/Toast';
 import {
   applyOrder,
   applyTheme,
@@ -93,7 +94,10 @@ export function Home() {
     }
     setBatchBusy(false);
     log(`批量${value ? '开启' : '关闭'}: 成功${ok} 失败${fail} 跳过${skip}`);
-    alert(`批量${value ? '开启' : '关闭'}：成功 ${ok} 台，失败 ${fail} 台，跳过 ${skip} 台`);
+    toast(
+      `批量${value ? '开启' : '关闭'}：成功 ${ok} · 失败 ${fail} · 跳过 ${skip}`,
+      fail > 0 ? 'err' : 'ok',
+    );
     setSelected(new Set());
     refresh();
   };
@@ -144,14 +148,15 @@ export function Home() {
     applyTheme();
   };
 
-  const runScene = async (sceneId: string, homeId: string) => {
+  const runScene = async (sceneId: string, homeId: string, name: string) => {
     const { api } = useApp.getState();
     try {
       await api.runScene(sceneId, homeId);
       log('scene 执行成功', sceneId);
+      toast(`已执行「${name}」`, 'ok');
     } catch (e) {
       log('scene 执行失败', e);
-      alert(`场景执行失败: ${e instanceof Error ? e.message : e}`);
+      toast(`场景失败: ${e instanceof Error ? e.message : e}`, 'err');
     }
   };
 
@@ -288,7 +293,7 @@ export function Home() {
                 <button
                   key={s.scene_id}
                   className="mi-scene-item"
-                  onClick={() => runScene(s.scene_id, String(s.home_id ?? currentHomeId))}
+                  onClick={() => runScene(s.scene_id, String(s.home_id ?? currentHomeId), s.name)}
                 >
                   <span className="mi-scene-play">▶</span>
                   <span className="mi-scene-name">{s.name}</span>

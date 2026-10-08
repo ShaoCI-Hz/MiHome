@@ -3,8 +3,9 @@
    浅灰背景 + 白色圆角卡片 + 米家蓝主色 + 底部三导航
    ============================================================ */
 :root {
-  --mi-bg: #f2f3f5;
-  --mi-card: #ffffff;
+  /* 半透明令牌：配合窗口 Mica 毛玻璃（磨砂透出在页面背景层） */
+  --mi-bg: rgba(242, 243, 245, 0.66);
+  --mi-card: rgba(255, 255, 255, 0.72);
   --mi-text: #333333;
   --mi-sub: #999999;
   --mi-blue: #3482ff;
@@ -194,7 +195,7 @@ button {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--mi-card);
   box-shadow: var(--mi-shadow);
   font-size: 16px;
   color: #666;
@@ -253,7 +254,7 @@ button {
   padding: 7px 16px;
   border-radius: 999px;
   font-size: 13px;
-  background: #fff;
+  background: var(--mi-card);
   color: #666;
   box-shadow: var(--mi-shadow);
   transition: background-color 0.16s var(--mi-ease-out), color 0.16s var(--mi-ease-out),
@@ -390,7 +391,7 @@ button {
   padding: 10px 16px;
   border-radius: 12px;
   border: none;
-  background: #fff;
+  background: var(--mi-card);
   box-shadow: var(--mi-shadow);
   outline: none;
   color: var(--mi-text);
@@ -463,7 +464,7 @@ button {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  background: #fff;
+  background: var(--mi-card);
   border-bottom: 1px solid #f0f1f3;
   font-size: 15px;
   font-weight: 600;
@@ -497,7 +498,7 @@ button {
 }
 
 .mi-detail-hero {
-  background: #fff;
+  background: var(--mi-card);
   border-radius: 16px;
   padding: 18px;
   box-shadow: var(--mi-shadow);
@@ -511,7 +512,7 @@ button {
 }
 
 .mi-detail-section {
-  background: #fff;
+  background: var(--mi-card);
   border-radius: 16px;
   padding: 14px 16px;
   box-shadow: var(--mi-shadow);
@@ -1114,8 +1115,8 @@ button {
    （二维码区域保持白底不随主题变化）
    ============================================================ */
 [data-theme='dark'] {
-  --mi-bg: #17181a;
-  --mi-card: #232427;
+  --mi-bg: rgba(23, 24, 26, 0.66);
+  --mi-card: rgba(35, 36, 39, 0.72);
   --mi-text: #ececee;
   --mi-sub: #8a8c92;
   --mi-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
@@ -1366,3 +1367,32 @@ button {
   box-shadow: 0 0 0 2px var(--mi-blue), var(--mi-shadow);
   transition: box-shadow 0.15s var(--mi-ease-out);
 }
+
+/* 编辑模式工具条（多选/尺寸/拖拽 三选一） */
+.mi-edit-modes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 8px;
+  animation: search-in 0.24s var(--mi-ease-out);
+}
+.mi-edit-modes span {
+  font-size: 12px;
+  color: var(--mi-sub);
+  margin-right: 4px;
+}
+.mi-edit-modes button {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--mi-card);
+  color: #666;
+  border: 1px solid transparent;
+  box-shadow: var(--mi-shadow);
+  transition: background-color 0.15s var(--mi-ease-out), color 0.15s var(--mi-ease-out);
+}
+.mi-edit-modes button.active {
+  background: var(--mi-blue);
+  color: #fff;
+}
+[data-theme='dark'] .mi-edit-modes button { color: #c3c5cb; }

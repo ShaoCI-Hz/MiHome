@@ -27,7 +27,9 @@ export function Home() {
   const [tab, setTab] = useState<Tab>('devices');
   const [roomIdx, setRoomIdx] = useState(0); // 0 = 全部
   const [sortMode, setSortMode] = useState<SortMode>('online');
-  const [editing, setEditing] = useState(false); // 卡片尺寸编辑模式
+  const [editing, setEditing] = useState(false); // 编辑模式
+  /** 编辑模式下的子意图（三合一拆分：多选/尺寸/拖拽互不打架） */
+  const [editMode, setEditMode] = useState<'check' | 'size' | 'drag'>('check');
   const [searching, setSearching] = useState(false); // 搜索框展开
   const [query, setQuery] = useState('');
   const [orderTick, setOrderTick] = useState(0); // 拖拽保存后触发重排
@@ -52,10 +54,11 @@ export function Home() {
     }
   };
 
-  // 编辑模式切换（退出时清空勾选）
+  // 编辑模式切换（退出时清空勾选与子模式）
   const toggleEdit = () => {
     setEditing((v) => !v);
     setSelected(new Set());
+    setEditMode('check');
   };
   const toggleSelect = (did: string) => {
     setSelected((prev) => {
@@ -223,6 +226,16 @@ export function Home() {
         </div>
       )}
 
+      {/* 编辑模式工具条：多选 / 尺寸 / 拖拽 三选一（拆分原三合一冲突） */}
+      {editing && tab === 'devices' && (
+        <div className="mi-edit-modes">
+          <span>编辑模式</span>
+          <button className={editMode === 'check' ? 'active' : ''} onClick={() => setEditMode('check')}>多选</button>
+          <button className={editMode === 'size' ? 'active' : ''} onClick={() => setEditMode('size')}>卡片尺寸</button>
+          <button className={editMode === 'drag' ? 'active' : ''} onClick={() => setEditMode('drag')}>拖拽排序</button>
+        </div>
+      )}
+
       {error && <div className="mi-error">{error}</div>}
 
       {/* ===== 设备页 ===== */}
@@ -261,10 +274,11 @@ export function Home() {
                     device={d}
                     index={i}
                     editing={editing}
+                    editMode={editMode}
                     onLongPress={() => setEditing(true)}
                     checked={selected.has(d.did)}
                     onToggleCheck={() => toggleSelect(d.did)}
-                    draggable={editing && sortMode === 'order'}
+                    draggable={editing && editMode === 'drag'}
                     onDragStartDid={() => {
                       dragDid.current = d.did;
                     }}

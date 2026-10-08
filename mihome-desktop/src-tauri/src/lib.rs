@@ -246,6 +246,16 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             use tauri::Manager;
 
+            // 窗口毛玻璃：Win11 Mica，失败回退 Acrylic/Blur
+            #[cfg(target_os = "windows")]
+            if let Some(w) = app.get_webview_window("main") {
+                if window_vibrancy::apply_mica(&w, None).is_err()
+                    && window_vibrancy::apply_blur(&w, None).is_err()
+                {
+                    // Win10 老系统等场景：保持不透明背景，功能不受影响
+                }
+            }
+
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出米家", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;

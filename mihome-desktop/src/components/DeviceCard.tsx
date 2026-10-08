@@ -63,6 +63,7 @@ function PowerIcon() {
 export function DeviceCard({
   device,
   editing,
+  editMode,
   onLongPress,
   checked,
   onToggleCheck,
@@ -73,6 +74,7 @@ export function DeviceCard({
 }: {
   device: MiDevice;
   editing?: boolean;
+  editMode?: 'check' | 'size' | 'drag';
   onLongPress?: () => void;
   checked?: boolean;
   onToggleCheck?: () => void;
@@ -271,7 +273,8 @@ export function DeviceCard({
           return; // 长按触发过，忽略本次点击
         }
         if (editing) {
-          onToggleCheck?.(); // 编辑态点击 = 勾选（批量操作）
+          // 仅多选模式下点击=勾选；尺寸/拖拽模式点击不动作
+          if (editMode === 'check') onToggleCheck?.();
           return;
         }
         setExpanded((v) => !v);
@@ -282,7 +285,7 @@ export function DeviceCard({
           {checked ? '✓' : ''}
         </div>
       )}
-      {editing && (
+      {editing && editMode === 'size' && (
         <div className="mi-size-picker" onClick={(e) => e.stopPropagation()}>
           <span>尺寸</span>
           <button className={size === 's' ? 'active' : ''} onClick={() => applySize('s')} title="紧凑">小</button>

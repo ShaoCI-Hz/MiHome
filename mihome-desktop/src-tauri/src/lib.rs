@@ -38,6 +38,65 @@ fn delete_auth() -> Result<(), String> {
     }
 }
 
+/// 托盘场景菜单项
+#[derive(Serialize, Deserialize)]
+pub struct TrayScene {
+    pub id: String,
+    pub name: String,
+}
+
+/// 构建托盘菜单（泛型：场景子菜单需要 dyn IsMenuItem 数组，裸类型参数写不出，抽辅助函数）
+fn build_tray_menu<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    scenes: &[TrayScene],
+) -> Result<tauri::menu::Menu<R>, String> {
+    use tauri::menu::{IsMenuItem, Menu, MenuItem, Submenu};
+
+    let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let quit = MenuItem::with_id(app, "quit", "退出米家", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+
+    if scenes.is_empty() {
+        return Menu::with_items(app, &[&show, &quit]).map_err(|e| e.to_string());
+    }
+
+    let scene_items: Vec<MenuItem<R>> = scenes
+        .iter()
+        .map(|s| {
+            MenuItem::with_id(
+                app,
+                format!("scene:{}", s.id),
+                s.name.clone(),
+                true,
+                None::<&str>,
+            )
+        })
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    let scene_refs: Vec<&dyn IsMenuItem<R>> = scene_items
+        .iter()
+        .map(|m| m as &dyn IsMenuItem<R>)
+        .collect();
+    let scene_menu = Submenu::with_items(app, "手动场景", true, &scene_refs)
+        .map_err(|e| e.to_string())?;
+
+    Menu::with_items(app, &[&show, &quit, &scene_menu]).map_err(|e| e.to_string())
+}
+
+/// 重建托盘菜单（同步手动场景子菜单，前端在场景变化时调用）
+#[tauri::command]
+fn update_tray_scenes(
+    app: tauri::AppHandle,
+    scenes: Vec<TrayScene>,
+) -> Result<(), String> {
+    let menu = build_tray_menu(&app, &scenes)?;
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 追加一行日志到文件（开发自测用；发布包中 manifest 路径无效时回退到临时目录）
 #[tauri::command]
 fn log_write(line: String) -> Result<(), String> {
@@ -265,15 +324,24 @@ pub fn run() {
                 .tooltip("米家 MiHome")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                .on_menu_event(|app, event| {
+                    use tauri::Emitter;
+                    let id = event.id.as_ref();
+                    if let Some(scene_id) = id.strip_prefix("scene:") {
+                        // 手动场景：通知前端执行（协议层在前端）
+                        let _ = app.emit("run-scene", scene_id.to_string());
+                        return;
                     }
-                    "quit" => app.exit(0),
-                    _ => {}
+                    match id {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                        "quit" => app.exit(0),
+                        _ => {}
+                    }
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
@@ -300,7 +368,8 @@ pub fn run() {
             load_auth,
             delete_auth,
             mi_fetch,
-            log_write
+            log_write,
+            update_tray_scenes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

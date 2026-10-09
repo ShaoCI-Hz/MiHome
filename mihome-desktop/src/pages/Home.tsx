@@ -15,6 +15,7 @@ import {
   type ThemePref,
 } from '../api/prefs';
 import { extractControls, getSpec } from '../api/spec';
+import { CommandPalette } from '../components/CommandPalette';
 import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from '@tauri-apps/plugin-autostart';
 
 type Tab = 'devices' | 'scenes' | 'me';
@@ -37,7 +38,20 @@ export function Home() {
   const [autostart, setAutostart] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false); // Ctrl+K 命令面板
   const dragDid = useRef<string | null>(null);
+
+  // 全局快捷键：Ctrl+K / Ctrl+F 开关命令面板
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'f')) {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // 开机自启状态
   useEffect(() => {
@@ -402,6 +416,19 @@ export function Home() {
           <span>我的</span>
         </button>
       </footer>
+
+      {/* Ctrl+K 命令面板 */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onGotoRoom={(didlist) => {
+          const idx = currentRooms.findIndex(
+            (r) => JSON.stringify(r.didlist ?? []) === JSON.stringify(didlist),
+          );
+          setRoomIdx(idx >= 0 ? idx + 1 : 0);
+          setTab('devices');
+        }}
+      />
     </div>
   );
 }

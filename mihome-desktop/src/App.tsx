@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useApp } from './api/store';
 import { applyTheme } from './api/prefs';
 import { schedulePropsFetch } from './api/propsStore';
+import { initTrayEvents, syncTrayScenes } from './api/tray';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { ToastHost } from './components/Toast';
@@ -43,6 +44,17 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [phase]);
+
+  // 托盘：注册场景执行事件 + 场景列表变化时同步菜单
+  const scenes = useApp((s) => s.scenes);
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    return initTrayEvents();
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    syncTrayScenes();
+  }, [phase, scenes]);
 
   const screen =
     phase === 'loading' ? (

@@ -246,13 +246,14 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             use tauri::Manager;
 
-            // 窗口毛玻璃：Win11 Mica，失败回退 Acrylic/Blur
+            // 窗口毛玻璃：优先 Acrylic（效果明显，类 macOS 模糊光斑），
+            // 失败回退 Mica（Win11 低饱和），再回退 Blur
             #[cfg(target_os = "windows")]
             if let Some(w) = app.get_webview_window("main") {
-                if window_vibrancy::apply_mica(&w, None).is_err()
-                    && window_vibrancy::apply_blur(&w, None).is_err()
+                if window_vibrancy::apply_acrylic(&w, None).is_err()
+                    && window_vibrancy::apply_mica(&w, None).is_err()
                 {
-                    // Win10 老系统等场景：保持不透明背景，功能不受影响
+                    let _ = window_vibrancy::apply_blur(&w, None);
                 }
             }
 

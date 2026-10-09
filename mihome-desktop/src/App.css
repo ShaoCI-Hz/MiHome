@@ -3,9 +3,9 @@
    浅灰背景 + 白色圆角卡片 + 米家蓝主色 + 底部三导航
    ============================================================ */
 :root {
-  /* 半透明令牌：配合窗口 Mica 毛玻璃（磨砂透出在页面背景层） */
-  --mi-bg: rgba(242, 243, 245, 0.66);
-  --mi-card: rgba(255, 255, 255, 0.72);
+  /* 半透明令牌：配合窗口 Acrylic 毛玻璃（磨砂透出在页面背景层） */
+  --mi-bg: rgba(242, 243, 245, 0.74);
+  --mi-card: rgba(255, 255, 255, 0.78);
   --mi-text: #333333;
   --mi-sub: #999999;
   --mi-blue: #3482ff;
@@ -33,6 +33,14 @@ body,
   font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
   color: var(--mi-text);
   overflow: hidden;
+}
+/* 关键：半透明底色只允许一层（html/#root 必须透明，
+   否则多层 rgba 叠加会抵消毛玻璃效果） */
+html,
+#root {
+  background: transparent;
+}
+body {
   background: var(--mi-bg);
 }
 
@@ -155,7 +163,8 @@ button {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--mi-bg);
+  /* 必须透明：毛玻璃底色只由 body 提供一层 */
+  background: transparent;
 }
 
 /* 顶栏 */
@@ -436,13 +445,15 @@ button {
 .mi-detail {
   width: min(440px, 92vw);
   height: 100%;
-  background: var(--mi-bg);
+  /* 详情侧板高不透明：避免透出遮罩与页面内容显脏 */
+  background: rgba(246, 247, 249, 0.95);
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   animation: panel-in 0.34s var(--mi-ease-page);
 }
 .mi-detail.closing { animation: panel-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+[data-theme='dark'] .mi-detail { background: rgba(27, 28, 31, 0.95); }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes panel-in { from { transform: translateX(100%); } to { transform: none; } }
@@ -1115,8 +1126,8 @@ button {
    （二维码区域保持白底不随主题变化）
    ============================================================ */
 [data-theme='dark'] {
-  --mi-bg: rgba(23, 24, 26, 0.66);
-  --mi-card: rgba(35, 36, 39, 0.72);
+  --mi-bg: rgba(23, 24, 26, 0.74);
+  --mi-card: rgba(35, 36, 39, 0.78);
   --mi-text: #ececee;
   --mi-sub: #8a8c92;
   --mi-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);

@@ -215,6 +215,50 @@ export function findEnergyKey(spec: DeviceSpec | null): string | null {
   return null;
 }
 
+/**
+ * 核心用户属性白名单（对齐官方米家详情页：只展示普通用户看得懂的控制项）。
+ * 依据属性 type 尾名匹配（如 on / brightness / target-temperature）。
+ * 开发者模式下绕过此过滤，完整展示 miot-spec 的全部属性。
+ */
+const USER_FACING_PROPS = new Set([
+  // 通用控制
+  'on', 'switch-status', 'status', 'mode', 'operation-mode', 'gear', 'power',
+  'pause', 'fault', 'indicator-light', 'night-light', 'backlight', 'volume', 'mute',
+  // 灯光
+  'brightness', 'color-temperature', 'color-temperature-kelvin',
+  // 环境与传感
+  'temperature', 'target-temperature', 'target-water-temperature',
+  'relative-humidity', 'target-humidity', 'illuminance', 'occupancy',
+  'air-quality', 'pm25', 'co2', 'battery-level', 'battery', 'contact-state',
+  'motion-state', 'smoke-concentration', 'gas-concentration', 'water-leakage',
+  // 风扇 / 空调
+  'fan-level', 'wind-speed', 'horizontal-swing', 'vertical-swing',
+  'eco', 'power-charge',
+  // 水与清洁
+  'water-level', 'sterilization', 'uv', 'airing', 'washing', 'drying',
+  'rotation', 'copiness', 'ventilator-fan', 'mop', 'suction',
+  // 烹饪 / 取暖等小家电
+  'cook-mode', 'cooking-mode', 'start-cook', 'keep-warm-temperature',
+  'keep-warm-time', 'cooking-time', 'target-cooking-time',
+  // 其他常见
+  'dnd-mode', 'screen', 'led', 'led-status', 'shutdown-temperature',
+]);
+
+/** 该属性在“易用模式”下是否展示 */
+export function isUserFacingProp(propType: string): boolean {
+  const tail = propType.split(':').pop() ?? propType;
+  return USER_FACING_PROPS.has(tail);
+}
+
+/** 易用模式过滤控件（开发者模式传 true 原样返回） */
+export function filterControlsForMode(
+  ctrls: ControlDesc[],
+  devMode: boolean,
+): ControlDesc[] {
+  if (devMode) return ctrls;
+  return ctrls.filter((c) => isUserFacingProp(c.urn));
+}
+
 /** 从规格中提取控件描述 */
 export interface ControlDesc {
   siid: number;

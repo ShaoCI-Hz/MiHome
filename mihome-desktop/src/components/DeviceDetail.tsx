@@ -1,8 +1,8 @@
 /** 设备详情页（全屏浮层）：完整属性/动作 + 设备信息，对齐米家设备详情 */
 import { useEffect, useState } from 'react';
 import type { MiDevice, PropValue } from '../api/types';
-import { findEnergyKey, getSpec, type ControlDesc, type DeviceSpec } from '../api/spec';
-import { getDisplayName, setDisplayName } from '../api/prefs';
+import { findEnergyKey, getSpec, isUserFacingProp, type ControlDesc, type DeviceSpec } from '../api/spec';
+import { getDisplayName, getDevMode, setDisplayName, subscribeDevMode } from '../api/prefs';
 import { useApp } from '../api/store';
 
 /** 解析统计值：value 是 "[123.4]" 形式的字符串，取第一项 */
@@ -90,6 +90,9 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
   const [dispName, setDispName] = useState(() => getDisplayName(device.did, device.name));
   const [energy, setEnergy] = useState<{ time: number; v: number }[]>([]);
   const [consumables, setConsumables] = useState<string[]>([]);
+  // 开发者模式：关闭时仅展示核心控制项与官方式动作（隐藏高阶项）
+  const [devMode, setDevModeState] = useState(getDevMode());
+  useEffect(() => subscribeDevMode(() => setDevModeState(getDevMode())), []);
 
   // 能耗 + 耗材
   useEffect(() => {
@@ -193,7 +196,16 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
     }
   };
 
-  const expanded = spec ? expandSpec(spec) : null;
+  // 展开规格（易用模式：只保留白名单核心属性；动作区仅开发者模式显示）
+  const expanded = (() => {
+    if (!spec) return null;
+    const full = expandSpec(spec);
+    if (devMode) return full;
+    return {
+      props: full.props.filter((p) => isUserFacingProp(p.urn)),
+      actions: [] as typeof full.actions,
+    };
+  })();
   const extra = (device.extra ?? {}) as Record<string, unknown>;
 
   // 退场：先播 280ms 动画再真正卸载
@@ -291,7 +303,9 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
             <div className="mi-detail-title">属性与控制</div>
             {!expanded && <div className="mi-detail-loading">加载规格…</div>}
             {expanded && expanded.props.length === 0 && (
-              <div className="mi-detail-loading">无可显示属性</div>
+              <div className="mi-detail-loading">
+                {devMode ? '无可显示属性' : '暂无易用控制项（"我的"→ 开发者模式 可查看全部）'}
+              </div>
             )}
             {expanded?.props.map((p) => {
               const key = `${p.siid}.${p.piid}`;

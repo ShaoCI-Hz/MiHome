@@ -6,6 +6,7 @@
 const RENAME_KEY = 'mi-rename-map';
 const ORDER_KEY = 'mi-card-order';
 const THEME_KEY = 'mi-theme';
+const DEV_KEY = 'mi-dev-mode';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
 export type SortMode = 'online' | 'name' | 'type' | 'order';
@@ -102,4 +103,36 @@ export function applyTheme(): void {
     pref === 'dark' ||
     (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+
+/* ===== 开发者模式（默认关闭=易用模式，仅显示核心控制项） ===== */
+
+const DEV_EVENT = 'mi-dev-mode-change';
+const devListeners = new Set<() => void>();
+
+export function getDevMode(): boolean {
+  return localStorage.getItem(DEV_KEY) === '1';
+}
+
+export function setDevMode(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(DEV_KEY, '1');
+    else localStorage.removeItem(DEV_KEY);
+  } catch {
+    /* ignore */
+  }
+  for (const fn of devListeners) fn();
+}
+
+/**
+ * 订阅开发者模式（配合 useSyncExternalStore 使用）。
+ * 返回 [订阅函数, 读取函数]。
+ */
+export function subscribeDevMode(cb: () => void): () => void {
+  devListeners.add(cb);
+  window.addEventListener(DEV_EVENT, cb);
+  return () => {
+    devListeners.delete(cb);
+    window.removeEventListener(DEV_EVENT, cb);
+  };
 }

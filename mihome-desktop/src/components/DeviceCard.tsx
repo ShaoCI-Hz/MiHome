@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { MiDevice } from '../api/types';
-import { extractControls, getDeviceImage, getSpec, type ControlDesc } from '../api/spec';
-import { getDisplayName } from '../api/prefs';
+import { extractControls, filterControlsForMode, getDeviceImage, getSpec, type ControlDesc } from '../api/spec';
+import { getDisplayName, getDevMode, subscribeDevMode } from '../api/prefs';
 import { schedulePropsFetch, setPropValue, useDidValues } from '../api/propsStore';
 import { useApp } from '../api/store';
 import { DeviceDetail } from './DeviceDetail';
@@ -93,6 +93,9 @@ export function DeviceCard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  // 开发者模式（默认关=易用模式，仅显示核心控制项；切换即时生效）
+  const [devMode, setDevModeState] = useState(getDevMode());
+  useEffect(() => subscribeDevMode(() => setDevModeState(getDevMode())), []);
   // 单卡尺寸（本机记忆）：s=紧凑 m=标准 l=大卡
   const [size, setSize] = useState<'s' | 'm' | 'l'>(() => {
     try {
@@ -175,8 +178,14 @@ export function DeviceCard({
     [api, device.did, values],
   );
 
-  const switchCtrl = useMemo(() => controls?.find((c) => c.kind === 'switch'), [controls]);
-  const otherCtrls = useMemo(() => controls?.filter((c) => c.kind !== 'switch'), [controls]);
+  // 易用模式过滤：只保留核心控制项（开发者模式显示全部）
+  const visible = useMemo(
+    () => (controls ? filterControlsForMode(controls, devMode) : controls),
+    [controls, devMode],
+  );
+
+  const switchCtrl = useMemo(() => visible?.find((c) => c.kind === 'switch'), [visible]);
+  const otherCtrls = useMemo(() => visible?.filter((c) => c.kind !== 'switch'), [visible]);
   const readonlyCtrls = useMemo(() => otherCtrls?.filter((c) => c.kind === 'readonly'), [otherCtrls]);
   const editableCtrls = useMemo(() => otherCtrls?.filter((c) => c.kind !== 'readonly'), [otherCtrls]);
   const sliderCtrls = useMemo(() => editableCtrls?.filter((c) => c.kind === 'slider'), [editableCtrls]);
@@ -366,9 +375,11 @@ export function DeviceCard({
         aria-hidden={!detailOpen}
       >
         <div className="mi-card-detail-inner">
-          {controls === null && <div className="mi-card-loading">加载控件…</div>}
-          {controls !== null && controls.length === 0 && (
-            <div className="mi-card-loading">该设备暂无可用控件</div>
+          {visible === null && <div className="mi-card-loading">加载控件…</div>}
+          {visible !== null && visible.length === 0 && (
+            <div className="mi-card-loading">
+              {devMode ? '该设备暂无可用控件' : '暂无易用控制项（可在"我的"开启开发者模式查看全部）'}
+            </div>
           )}
           {detailCtrls?.map((c) => {
             const key = `${c.siid}.${c.piid}`;

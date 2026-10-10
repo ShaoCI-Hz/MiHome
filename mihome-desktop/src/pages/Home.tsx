@@ -8,6 +8,9 @@ import {
   applyOrder,
   applyTheme,
   getThemePref,
+  getDevMode,
+  setDevMode,
+  subscribeDevMode,
   reorderList,
   setOrder,
   setThemePref,
@@ -36,6 +39,9 @@ export function Home() {
   const [orderTick, setOrderTick] = useState(0); // 拖拽保存后触发重排
   const [theme, setTheme] = useState<ThemePref>(() => getThemePref());
   const [autostart, setAutostart] = useState(false);
+  // 开发者模式（默认关）：开启后设备详情/卡片显示 miot-spec 全部控制项
+  const [devMode, setDevModeState] = useState(getDevMode());
+  useEffect(() => subscribeDevMode(() => setDevModeState(getDevMode())), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false); // Ctrl+K 命令面板
@@ -389,6 +395,20 @@ export function Home() {
               <span>关闭行为</span>
               <em>最小化到系统托盘</em>
             </div>
+            <div className="mi-cell">
+              <span title="开启后显示设备的全部高阶控制项（电压/电流/厂商自定义等）">开发者模式</span>
+              <button
+                className={`mi-toggle ${devMode ? 'on' : ''}`}
+                onClick={() => setDevMode(!devMode)}
+              >
+                <span className="mi-toggle-knob" />
+              </button>
+            </div>
+            {devMode && (
+              <div className="mi-cell">
+                <span style={{ color: 'var(--mi-sub)', fontSize: 12 }}>已开启：设备详情展示全部控制项</span>
+              </div>
+            )}
             <div className="mi-cell">
               <span>版本</span>
               <em>0.1.0 (dev)</em>

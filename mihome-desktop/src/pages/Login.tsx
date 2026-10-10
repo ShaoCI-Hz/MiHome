@@ -8,6 +8,8 @@ export function Login() {
   const { beginQrLogin, confirmQrLogin, loading, error } = useApp();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'waiting' | 'error'>('loading');
+  // 真实错误透出（不再吞错只显示"二维码过期"）
+  const [localError, setLocalError] = useState<string | null>(null);
   const qrRef = useRef<QrLoginData | null>(null);
   const seqRef = useRef(0);
 
@@ -17,6 +19,7 @@ export function Login() {
     (async () => {
       setStatus('loading');
       setQrDataUrl(null);
+      setLocalError(null);
       try {
         const loginUrl = await beginQrLogin();
         if (dead || seq !== seqRef.current) return;
@@ -30,6 +33,7 @@ export function Login() {
       } catch (e) {
         if (dead || seq !== seqRef.current) return;
         console.error(e);
+        setLocalError(e instanceof Error ? e.message : String(e));
         setStatus('error');
       }
     })();
@@ -54,6 +58,7 @@ export function Login() {
       } catch (e) {
         if (!dead) {
           console.error(e);
+          setLocalError(e instanceof Error ? e.message : String(e));
           setStatus('error');
         }
       }
@@ -64,6 +69,8 @@ export function Login() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  const displayError = error ?? localError ?? '二维码已过期或获取失败';
 
   return (
     <div className="login-page">
@@ -81,7 +88,7 @@ export function Login() {
           )}
           {status === 'error' && (
             <div className="qr-error">
-              <p>{error ?? '二维码已过期或获取失败'}</p>
+              <p>{displayError}</p>
               <button onClick={() => window.location.reload()}>重新获取二维码</button>
             </div>
           )}

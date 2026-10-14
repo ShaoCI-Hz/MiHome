@@ -137,3 +137,14 @@ gh release create vX.Y.Z ...
 1. 抓包补全消息中心、自动化列表、房间管理（需用户配合抓包）。
 2. 发布 `v0.2.0`：本批修复 + 上述功能（视抓包进度）。
 3. 长期：与官方米家 App 的视觉一致性继续打磨（分型卡、产品图、动效）。
+
+## 10. 目录搬迁收尾记录
+
+本项目原先位于 `D:\RuanJian\Xiangmu\MIHOME`，已整体迁至 `D:\RuanJian\Reasonix Studio\XiangMu\MiHome`。迁移当时的实况与遗留事项：
+
+- `.git` 与全部提交历史随迁，工作区干净（`git status` 无改动）。本轮修复已作为两个提交入库（`fix: 修复产品评估报告问题...`、`docs: 新增项目交接说明...`），尚未推送到 GitHub。
+- `src-tauri\target`（约 16 GB Rust 编译缓存）按计划未迁移：路径变化后缓存本就会失效，首次 `cargo check` / `cargo build` 需要全量重编译，耐心等待即可。
+- `.venv` 内记录的旧路径已就地修正（`pyvenv.cfg`、`Scripts\activate`、`Scripts\activate.bat`），pillow 可直接使用，无需重建。
+- 迁移后已验证：`pnpm install` 无差异、`pnpm exec tsc --noEmit` 退出码 0。
+- 旧路径残留：`D:\RuanJian\Xiangmu\MIHOME\MiHome` 是一个空的目录壳（被迁移时仍在运行的 AI 工具锁定，里面的 `.reasonix` 任务日志已复制到新目录内同名位置）。在旧工具关闭后执行 `Remove-Item 'D:\RuanJian\Xiangmu\MIHOME' -Recurse -Force` 即可彻底清掉。
+- AI 对话历史存放于 `%APPDATA%\reasonix`（会话正文在 `desktop-sessions-v5`，约 1.08 GB），属于本机工具数据而非项目文件，新旧工具共用同一数据根，因此没有搬动也不会丢失。项目索引 `desktop-projects.json` 里的 MiHome 条目仍写着旧路径；若希望历史与新位置关联，可在关闭 AI 工具后把该文件中的 `D:\\RuanJian\\Xiangmu\\MIHOME\\MiHome` 替换为 `D:\\RuanJian\\Reasonix Studio\\XiangMu\\MiHome`（先备份；注意 PowerShell 5.1 写文件默认编码会损坏 JSON，用 Python 或支持 UTF-8 无 BOM 的方式改写）。不改也不影响使用，直接在新工具里打开新目录即可。

@@ -3,6 +3,8 @@ import { useApp } from './api/store';
 import { applyTheme } from './api/prefs';
 import { schedulePropsFetch } from './api/propsStore';
 import { initTrayEvents, syncTrayScenes } from './api/tray';
+import { notify } from './api/notify';
+import { log } from './api/log';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { ToastHost } from './components/Toast';
@@ -28,15 +30,31 @@ export default function App() {
   // 统一轮询：60 秒刷设备列表 + 批量刷属性；窗口恢复可见时立即刷一轮
   useEffect(() => {
     if (phase !== 'ready') return;
-    const tick = () => {
+    let lastOnline: Map<string, boolean> | null = null;
+    const tick = async () => {
       if (document.visibilityState !== 'visible') return;
       const { refresh, devices } = useApp.getState();
-      refresh().catch(() => undefined);
-      schedulePropsFetch(devices.map((d) => d.did));
+      if (!lastOnline) lastOnline = new Map(devices.map((d) => [d.did, d.isOnline]));
+      await refresh().catch(() => undefined);
+      const { devices: latest } = useApp.getState();
+      // 离线告警：由在线转离线的设备发系统通知（窗口可见时 notify 自动跳过）
+      const offline: string[] = [];
+      for (const d of latest) {
+        if (lastOnline.get(d.did) === true && !d.isOnline) offline.push(d.name);
+      }
+      lastOnline = new Map(latest.map((d) => [d.did, d.isOnline]));
+      if (offline.length) {
+        log('设备离线告警', offline.join(','));
+        notify(
+          '设备离线',
+          `${offline.slice(0, 3).join('、')}${offline.length > 3 ? ` 等 ${offline.length} 台` : ''} 已离线`,
+        );
+      }
+      schedulePropsFetch(latest.map((d) => d.did));
     };
-    const timer = setInterval(tick, 60000);
+    const timer = setInterval(() => void tick(), 60000);
     const onVis = () => {
-      if (document.visibilityState === 'visible') tick();
+      if (document.visibilityState === 'visible') void tick();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => {

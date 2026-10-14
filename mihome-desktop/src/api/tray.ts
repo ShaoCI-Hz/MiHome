@@ -3,7 +3,14 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useApp } from './store';
 import { toast } from '../components/Toast';
+import { notify } from './notify';
 import { log } from './log';
+
+/** 场景执行结果反馈：可见时 Toast，后台时补发系统通知 */
+export function feedback(title: string, body: string, kind: 'ok' | 'err' = 'ok'): void {
+  toast(body, kind);
+  notify(title, body);
+}
 
 /** 场景变化后同步托盘子菜单（fire-and-forget） */
 export function syncTrayScenes(): void {
@@ -23,9 +30,9 @@ export function initTrayEvents(): () => void {
     log('托盘触发场景', sceneId, scene?.name ?? '(未知)');
     try {
       await api.runScene(sceneId, String(scene?.home_id ?? ''));
-      toast(`已执行「${scene?.name ?? '场景'}」`, 'ok');
+      feedback('场景已执行', `已执行「${scene?.name ?? '场景'}」`, 'ok');
     } catch (e) {
-      toast(`场景失败: ${e instanceof Error ? e.message : e}`, 'err');
+      feedback('场景执行失败', `场景失败: ${e instanceof Error ? e.message : e}`, 'err');
     }
   });
   return () => {

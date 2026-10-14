@@ -7,13 +7,15 @@
     "core:default",
     "opener:default",
     "autostart:default",
+    "notification:default",
     {
       "identifier": "http:default",
       "allow": [
         { "url": "https://*.xiaomi.com/*" },
         { "url": "https://*.mijia.tech/*" },
         { "url": "https://*.mi.com/*" },
-        { "url": "https://home.miot-spec.com/*" }
+        { "url": "https://home.miot-spec.com/*" },
+        { "url": "https://api.github.com/*" }
       ]
     }
   ]

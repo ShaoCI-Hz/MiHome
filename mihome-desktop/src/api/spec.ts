@@ -224,22 +224,25 @@ const USER_FACING_PROPS = new Set([
   // 通用控制
   'on', 'switch-status', 'status', 'mode', 'operation-mode', 'gear', 'power',
   'pause', 'fault', 'indicator-light', 'night-light', 'backlight', 'volume', 'mute',
-  // 灯光
-  'brightness', 'color-temperature', 'color-temperature-kelvin',
-  // 环境与传感
+  // 灯光（含彩灯选色）
+  'brightness', 'color-temperature', 'color-temperature-kelvin', 'color', 'hue', 'saturation',
+  // 环境与传感（含安防状态）
   'temperature', 'target-temperature', 'target-water-temperature',
   'relative-humidity', 'target-humidity', 'illuminance', 'occupancy',
   'air-quality', 'pm25', 'co2', 'battery-level', 'battery', 'contact-state',
   'motion-state', 'smoke-concentration', 'gas-concentration', 'water-leakage',
-  // 风扇 / 空调
-  'fan-level', 'wind-speed', 'horizontal-swing', 'vertical-swing',
+  'weight', 'body-weight',
+  // 风扇 / 空调（含常见别名）
+  'fan-level', 'fan-speed', 'wind-speed', 'horizontal-swing', 'vertical-swing',
   'eco', 'power-charge',
-  // 水与清洁
+  // 水与清洁（含窗帘电机）
   'water-level', 'sterilization', 'uv', 'airing', 'washing', 'drying',
-  'rotation', 'copiness', 'ventilator-fan', 'mop', 'suction',
+  'rotation', 'copiness', 'ventilator-fan', 'mop', 'suction', 'motor',
   // 烹饪 / 取暖等小家电
   'cook-mode', 'cooking-mode', 'start-cook', 'keep-warm-temperature',
   'keep-warm-time', 'cooking-time', 'target-cooking-time',
+  // 定时与安全锁（官方米家高频）
+  'countdown', 'countdown-period', 'auto-off-delay', 'child-lock', 'wall-plugin',
   // 其他常见
   'dnd-mode', 'screen', 'led', 'led-status', 'shutdown-temperature',
 ]);
@@ -303,7 +306,8 @@ export function extractControls(spec: DeviceSpec): ControlDesc[] {
             label: o.label ?? o.description ?? String(o.value),
           })),
         };
-      } else if (access.includes('read') && ['on', 'status', 'temperature', 'relative-humidity', 'battery-level'].includes(name)) {
+      } else if (access.includes('read') && isUserFacingProp(p.type)) {
+        // 只读项也走同一白名单（此前 5 项硬编码口径把门磁/人体/光照等挡在卡外）
         desc = { siid: svc.iid, piid: p.iid, kind: 'readonly', label, urn: p.type };
       }
       if (desc) {
@@ -314,5 +318,7 @@ export function extractControls(spec: DeviceSpec): ControlDesc[] {
     }
   }
   out.sort((a, b) => ((a as unknown as { _p: number })._p) - ((b as unknown as { _p: number })._p));
-  return out.slice(0, 4);
+  // 返回全量（按优先级排序）；卡片截取与白名单过滤由消费端按模式处理，
+  // 避免"先截 4 个再过滤"把白名单项挤掉
+  return out;
 }

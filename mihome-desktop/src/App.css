@@ -1379,6 +1379,68 @@ button {
   transition: box-shadow 0.15s var(--mi-ease-out);
 }
 
+/* ===== 修复批次补充样式 ===== */
+/* 错误条：可自愈操作（重试/关闭） */
+.mi-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mi-error > span {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+}
+.mi-error-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mi-error-actions button {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--mi-danger);
+  border: 1px solid rgba(250, 81, 81, 0.4);
+}
+[data-theme='dark'] .mi-error-actions button { background: rgba(255, 255, 255, 0.12); }
+
+/* 设置分组标题（我的页：外观/系统/开发者/关于） */
+.mi-cell-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mi-sub);
+  margin: 18px 4px 8px;
+  letter-spacing: 0.05em;
+}
+
+/* 检查更新小按钮 */
+.mi-cell-mini-btn {
+  font-size: 12px;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: var(--mi-blue);
+  color: #fff;
+  border: none;
+}
+.mi-cell-mini-btn:hover:not(:disabled) { background: var(--mi-blue-dark); }
+
+/* 场景执行中状态（防重复触发反馈） */
+.mi-scene-item.running { opacity: 0.65; cursor: progress; }
+.mi-scene-item.running .mi-scene-play { animation: pulse 0.9s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 键盘可达性：焦点可见 */
+:focus-visible {
+  outline: 2px solid var(--mi-blue);
+  outline-offset: 2px;
+}
+button:focus:not(:focus-visible) { outline: none; }
+
 /* 编辑模式工具条（多选/尺寸/拖拽 三选一） */
 .mi-edit-modes {
   display: flex;

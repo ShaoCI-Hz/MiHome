@@ -1,5 +1,5 @@
 /** 设备详情页（全屏浮层）：完整属性/动作 + 设备信息，对齐米家设备详情 */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MiDevice, PropValue } from '../api/types';
 import { findEnergyKey, getSpec, isUserFacingProp, type ControlDesc, type DeviceSpec } from '../api/spec';
 import { getDisplayName, getDevMode, setDisplayName, subscribeDevMode } from '../api/prefs';
@@ -183,6 +183,35 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
     }
   };
 
+  // 滑条节流：拖动仅本地回显，停顿 300ms 合并提交一次
+  const sliderTimer = useRef<number | null>(null);
+  const sliderPending = useRef<{ p: FullProp; v: unknown; prev: unknown } | null>(null);
+  const setPropSmooth = (p: FullProp, value: unknown) => {
+    const key = `${p.siid}.${p.piid}`;
+    const first = sliderPending.current === null;
+    setValues((v) => ({ ...v, [key]: value }));
+    sliderPending.current = {
+      p,
+      v: value,
+      prev: first ? values[key] : sliderPending.current!.prev,
+    };
+    if (sliderTimer.current) window.clearTimeout(sliderTimer.current);
+    sliderTimer.current = window.setTimeout(() => {
+      sliderTimer.current = null;
+      void (async () => {
+        const q = sliderPending.current;
+        sliderPending.current = null;
+        if (!q) return;
+        try {
+          await api.setDevicesProp({ did: device.did, siid: q.p.siid, piid: q.p.piid, value: q.v });
+        } catch (e) {
+          setValues((v) => ({ ...v, [`${q.p.siid}.${q.p.piid}`]: q.prev }));
+          setMsg(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    }, 300);
+  };
+
   const runAct = async (siid: number, aiid: number, label: string) => {
     setBusy(true);
     setMsg(null);
@@ -215,6 +244,19 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
     setClosing(true);
     window.setTimeout(onClose, 280);
   };
+
+  // Esc 关闭详情（桌面弹层键盘闭环）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        requestClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closing]);
 
   return (
     <div
@@ -336,8 +378,8 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
                       max={max}
                       step={step}
                       value={num}
-                      disabled={!device.isOnline || busy}
-                      onChange={(e) => setProp(p, Number(e.target.value))}
+                      disabled={!device.isOnline}
+                      onChange={(e) => setPropSmooth(p, Number(e.target.value))}
                     />
                     <em>{num}</em>
                   </div>

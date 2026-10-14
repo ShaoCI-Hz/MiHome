@@ -34,6 +34,8 @@ interface AppState {
   selectHome: (homeId: string) => Promise<void>;
   /** 刷新当前家庭数据 */
   refresh: () => Promise<void>;
+  /** 清除全局错误提示 */
+  clearError: () => void;
   /** 退出登录 */
   logout: () => Promise<void>;
 }
@@ -167,16 +169,23 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     refresh: async () => {
-      const { currentHomeId, homes } = get();
+      const { currentHomeId, homes, scenes } = get();
       if (!currentHomeId) return;
       set({ loading: true });
       try {
-        const devices = await api.getDevicesList(currentHomeId, homes);
-        set({ devices, loading: false });
+        // 设备与场景同步刷新（此前场景页点刷新无效果）
+        const [devices, newScenes] = await Promise.all([
+          api.getDevicesList(currentHomeId, homes),
+          api.getScenesList(currentHomeId, homes).catch(() => scenes),
+        ]);
+        // 成功即清除历史错误，避免网络抖动的错误常驻误导
+        set({ devices, scenes: newScenes, loading: false, error: null });
       } catch (e) {
         set({ loading: false, error: e instanceof Error ? e.message : String(e) });
       }
     },
+
+    clearError: () => set({ error: null }),
 
     logout: async () => {
       cancelLoginPoll();

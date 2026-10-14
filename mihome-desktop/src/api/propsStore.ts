@@ -16,13 +16,59 @@ const propKey = (did: string, siid: number, piid: number) => `${did}:${siid}.${p
 
 interface PropsState {
   values: Record<string, unknown>;
+  /** 读取失败的属性：key → 错误码（区分"没数据/需网关/设备异常"） */
+  failed: Record<string, number>;
+  /** 最近一次成功批量拉取的时间戳（数据新鲜度） */
+  updatedAt: number;
   patch: (next: Record<string, unknown>) => void;
+  /** 记录/清除失败（成功读取时自动清除对应 key） */
+  markFailed: (fails: Record<string, number>, oks: string[]) => void;
 }
 
 export const useProps = create<PropsState>((set) => ({
   values: {},
+  failed: {},
+  updatedAt: 0,
   patch: (next) => set((s) => ({ values: { ...s.values, ...next } })),
+  markFailed: (fails, oks) =>
+    set((s) => {
+      const failed = { ...s.failed };
+      for (const k of oks) delete failed[k];
+      for (const [k, code] of Object.entries(fails)) failed[k] = code;
+      return { failed };
+    }),
 }));
+
+/** 失败码 → 用户可读原因 */
+export function explainPropError(code: number): string {
+  switch (code) {
+    case -704040003:
+      return '需蓝牙网关在线';
+    case -704042011:
+      return '设备离线';
+    case -704010000:
+      return '无权限读取';
+    case -704040004:
+    case -704040005:
+      return '设备不支持';
+    default:
+      return `暂无数据(${code})`;
+  }
+}
+
+/** 卡片订阅：本设备的失败码切片 */
+function pickFailed(failed: Record<string, number>, did: string): Record<string, number> {
+  const prefix = `${did}:`;
+  const out: Record<string, number> = {};
+  for (const k of Object.keys(failed)) {
+    if (k.startsWith(prefix)) out[k.slice(prefix.length)] = failed[k];
+  }
+  return out;
+}
+
+export function useDidFailed(did: string): Record<string, number> {
+  return useProps(useShallow((s) => pickFailed(s.failed, did)));
+}
 
 /** 乐观写入单个属性值（控制时立即回显，失败由调用方回滚） */
 export function setPropValue(did: string, siid: number, piid: number, value: unknown): void {
@@ -85,11 +131,24 @@ async function doFetch(dids: string[]): Promise<void> {
     try {
       const ret = (await api.getDevicesProp(chunk)) as PropValue[];
       const next: Record<string, unknown> = {};
+      const fails: Record<string, number> = {};
+      const oks: string[] = [];
       for (const r of ret) {
-        if (r.code === 0 || r.code === 1) next[propKey(r.did, r.siid, r.piid)] = r.value;
+        const k = propKey(r.did, r.siid, r.piid);
+        if (r.code === 0 || r.code === 1) {
+          next[k] = r.value;
+          oks.push(k);
+        } else {
+          // 不再静默丢弃：记录失败码供 UI 分类解释
+          fails[k] = r.code;
+        }
       }
-      useProps.getState().patch(next);
-      log(`批量属性: ${chunk.length} keys → ${Object.keys(next).length} 值`);
+      const st = useProps.getState();
+      st.patch(next);
+      st.markFailed(fails, oks);
+      useProps.setState({ updatedAt: Date.now() });
+      const failCount = Object.keys(fails).length;
+      log(`批量属性: ${chunk.length} keys → ${Object.keys(next).length} 值${failCount ? `（${failCount} 项失败）` : ''}`);
     } catch (e) {
       log('批量属性请求失败 -', e);
     }

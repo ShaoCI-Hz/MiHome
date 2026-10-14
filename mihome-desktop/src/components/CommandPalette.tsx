@@ -31,6 +31,7 @@ export function CommandPalette({ open, onClose, onGotoRoom }: Props) {
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState(0);
   const [detailDevice, setDetailDevice] = useState<typeof devices[0] | null>(null);
+  const [allDevices, setAllDevices] = useState<typeof devices | null>(null); // 跨家庭缓存
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +39,18 @@ export function CommandPalette({ open, onClose, onGotoRoom }: Props) {
       setQ('');
       setCursor(0);
       setDetailDevice(null);
+      // 首次打开加载跨家庭设备（getAllDevices 此前已封装但闲置）
+      if (!allDevices) {
+        api
+          .getAllDevices()
+          .then((list) => {
+            setAllDevices(list);
+            log('命令面板跨家庭设备', list.length);
+          })
+          .catch((e) => log('跨家庭设备加载失败 -', e));
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const results = useMemo<Result[]>(() => {
@@ -78,8 +90,9 @@ export function CommandPalette({ open, onClose, onGotoRoom }: Props) {
         },
       });
     }
-    // 设备（打开详情）
-    for (const d of devices) {
+    // 设备（打开详情，跨家庭全量）
+    const devicePool = allDevices ?? devices;
+    for (const d of devicePool) {
       const name = getDisplayName(d.did, d.name);
       if (
         keyword &&
@@ -109,7 +122,7 @@ export function CommandPalette({ open, onClose, onGotoRoom }: Props) {
       return order[a.kind] - order[b.kind];
     });
     return out.slice(0, 30);
-  }, [q, scenes, devices, currentRooms, api, currentHomeId, onClose, onGotoRoom]);
+  }, [q, scenes, devices, allDevices, currentRooms, api, currentHomeId, onClose, onGotoRoom]);
 
   // 键盘导航
   useEffect(() => {

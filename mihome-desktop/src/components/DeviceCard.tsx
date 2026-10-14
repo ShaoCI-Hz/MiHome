@@ -4,7 +4,9 @@ import { createPortal } from 'react-dom';
 import type { MiDevice } from '../api/types';
 import { extractControls, filterControlsForMode, getDeviceImage, getSpec, type ControlDesc } from '../api/spec';
 import { getDisplayName, getDevMode, subscribeDevMode } from '../api/prefs';
-import { schedulePropsFetch, setPropValue, useDidValues } from '../api/propsStore';
+import { toast } from './Toast';
+import { log } from '../api/log';
+import { schedulePropsFetch, setPropValue, useDidValues, useDidFailed, explainPropError, useProps } from '../api/propsStore';
 import { useApp } from '../api/store';
 import { DeviceDetail } from './DeviceDetail';
 
@@ -89,6 +91,8 @@ export function DeviceCard({
   const [controls, setControls] = useState<ControlDesc[] | null>(null);
   // 属性值改由中心化仓库提供（批量拉取 + 统一轮询）
   const values = useDidValues(device.did);
+  const failed = useDidFailed(device.did);
+  const updatedAt = useProps((s) => s.updatedAt);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -170,7 +174,11 @@ export function DeviceCard({
         await api.setDevicesProp({ did: device.did, siid: c.siid, piid: c.piid, value });
       } catch (e) {
         setPropValue(device.did, c.siid, c.piid, prev); // 回滚
-        setErr(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        setErr(msg);
+        // 失败必须可感知：卡片展开区可能收起，全局 Toast 兜底
+        toast(`控制失败：${msg}`, 'err');
+        log('设备控制失败', device.did, c.label, msg);
       } finally {
         setBusy(false);
       }
@@ -178,9 +186,44 @@ export function DeviceCard({
     [api, device.did, values],
   );
 
-  // 易用模式过滤：只保留核心控制项（开发者模式显示全部）
+  // 滑条平滑提交：拖动仅本地回显，停顿 300ms 合并为一次请求（修复"每像素一请求+拖动中禁用"）
+  const sliderTimer = useRef<number | null>(null);
+  const sliderPending = useRef<{ c: ControlDesc; v: unknown; prev: unknown } | null>(null);
+  const setSliderSmooth = useCallback(
+    (c: ControlDesc, value: unknown) => {
+      const key = `${c.siid}.${c.piid}`;
+      const first = sliderPending.current === null;
+      setPropValue(device.did, c.siid, c.piid, value);
+      sliderPending.current = {
+        c,
+        v: value,
+        prev: first ? values[key] : sliderPending.current!.prev,
+      };
+      if (sliderTimer.current) window.clearTimeout(sliderTimer.current);
+      sliderTimer.current = window.setTimeout(() => {
+        sliderTimer.current = null;
+        void (async () => {
+          const p = sliderPending.current;
+          sliderPending.current = null;
+          if (!p) return;
+          try {
+            await api.setDevicesProp({ did: device.did, siid: p.c.siid, piid: p.c.piid, value: p.v });
+          } catch (e) {
+            setPropValue(device.did, p.c.siid, p.c.piid, p.prev);
+            const msg = e instanceof Error ? e.message : String(e);
+            setErr(msg);
+            toast(`控制失败：${msg}`, 'err');
+            log('滑条提交失败', device.did, p.c.label, msg);
+          }
+        })();
+      }, 300);
+    },
+    [api, device.did, values],
+  );
+
+  // 易用模式过滤：只保留核心控制项（开发者模式显示全部）；过滤后再取 4 个
   const visible = useMemo(
-    () => (controls ? filterControlsForMode(controls, devMode) : controls),
+    () => (controls ? filterControlsForMode(controls, devMode).slice(0, 4) : controls),
     [controls, devMode],
   );
 
@@ -215,8 +258,20 @@ export function DeviceCard({
 
   const valOf = (c?: ControlDesc) =>
     c ? values[`${c.siid}.${c.piid}`] : undefined;
+  /** 该属性是否有可解释的失败码 */
+  const failOf = (c?: ControlDesc) =>
+    c ? failed[`${c.siid}.${c.piid}`] : undefined;
 
   const isOn = valOf(switchCtrl) === true;
+
+  // 数据新鲜度标签（>90s 才提示，避免常驻噪音）
+  const freshLabel = (() => {
+    if (!updatedAt) return '';
+    const age = Math.floor((Date.now() - updatedAt) / 1000);
+    if (age <= 90) return '';
+    if (age < 300) return ` · ${Math.floor(age / 60)} 分钟前更新`;
+    return ' · 数据较旧';
+  })();
 
   // 状态文案
   const statusText = (() => {
@@ -228,11 +283,16 @@ export function DeviceCard({
     }
     if (sensorMain) {
       const v = valOf(sensorMain);
-      if (v !== undefined) return `${sensorMain.label}: ${String(v)}`;
+      if (v !== undefined) return `${sensorMain.label}: ${String(v)}${freshLabel}`;
+      const code = failOf(sensorMain);
+      if (code !== undefined) return explainPropError(code);
     }
     if (readonlyCtrls?.length) {
-      const v = valOf(readonlyCtrls[0]);
-      if (v !== undefined) return `${readonlyCtrls[0].label}: ${String(v)}`;
+      const r = readonlyCtrls[0];
+      const v = valOf(r);
+      if (v !== undefined) return `${r.label}: ${String(v)}${freshLabel}`;
+      const code = failOf(r);
+      if (code !== undefined) return explainPropError(code);
     }
     return '在线';
   })();
@@ -274,7 +334,11 @@ export function DeviceCard({
       onPointerDown={startLong}
       onPointerUp={cancelLong}
       onPointerLeave={cancelLong}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        // 桌面惯例：右键直达设备详情（原为全面禁用右键）
+        e.preventDefault();
+        if (!editing) setShowDetail(true);
+      }}
       onClick={() => {
         cancelLong();
         if (longFired.current) {
@@ -361,8 +425,8 @@ export function DeviceCard({
             max={dimmerCtrl.range?.[1] ?? 100}
             step={dimmerCtrl.range?.[2] ?? 1}
             value={typeof valOf(dimmerCtrl) === 'number' ? (valOf(dimmerCtrl) as number) : (dimmerCtrl.range?.[0] ?? 1)}
-            disabled={!device.isOnline || busy}
-            onChange={(e) => setValue(dimmerCtrl, Number(e.target.value))}
+            disabled={!device.isOnline}
+            onChange={(e) => setSliderSmooth(dimmerCtrl, Number(e.target.value))}
           />
           <em>{fmtVal(dimmerCtrl)}</em>
         </div>
@@ -396,8 +460,8 @@ export function DeviceCard({
                     max={max}
                     step={step}
                     value={num}
-                    disabled={!device.isOnline || busy}
-                    onChange={(e) => setValue(c, Number(e.target.value))}
+                    disabled={!device.isOnline}
+                    onChange={(e) => setSliderSmooth(c, Number(e.target.value))}
                   />
                   <em>{num}</em>
                 </div>

@@ -284,18 +284,57 @@ async fn mi_fetch(
     })
 }
 
+/// 关闭按钮行为：true=隐藏到托盘（默认），false=直接退出（前端可切换）
+static CLOSE_TO_TRAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// 设置关闭行为（true=隐藏到托盘，false=直接退出）
+#[tauri::command]
+fn set_close_to_tray(v: bool) {
+    use std::sync::atomic::Ordering;
+    CLOSE_TO_TRAY.store(v, Ordering::Relaxed);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use std::sync::atomic::Ordering;
+
     tauri::Builder::default()
+        // 单实例：二次启动唤起已有窗口（必须最先注册）
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            use tauri::Manager;
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None::<Vec<&str>>,
+            // 开机自启时静默后台启动，不抢前台（配合 setup 的 --minimized 检测）
+            Some(vec!["--minimized"]),
         ))
-        // 关闭按钮 → 隐藏到托盘（真正退出走托盘菜单）
-        .on_window_event(|window, event| {
+        // 关闭按钮：按偏好隐藏到托盘或直接退出；首关发系统通知提示去向
+        .on_window_event(move |window, event| {
+            use tauri::Manager;
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if !CLOSE_TO_TRAY.load(Ordering::Relaxed) {
+                    return; // 用户选择了"直接退出"，放行
+                }
+                use tauri_plugin_notification::NotificationExt;
+                static ONCE: std::sync::Once = std::sync::Once::new();
+                ONCE.call_once(|| {
+                    let _ = window
+                        .app_handle()
+                        .notification()
+                        .builder()
+                        .title("米家已在后台运行")
+                        .body("窗口已最小化到系统托盘，右键托盘图标可退出程序")
+                        .show();
+                });
                 let _ = window.hide();
                 api.prevent_close();
             }
@@ -304,6 +343,13 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             use tauri::Manager;
+
+            // 开机自启（--minimized 参数）：静默后台启动，不抢前台
+            if std::env::args().any(|a| a == "--minimized") {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
 
             // 窗口毛玻璃：优先 Acrylic（效果明显，类 macOS 模糊光斑），
             // 失败回退 Mica（Win11 低饱和），再回退 Blur
@@ -369,7 +415,8 @@ pub fn run() {
             delete_auth,
             mi_fetch,
             log_write,
-            update_tray_scenes
+            update_tray_scenes,
+            set_close_to_tray
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

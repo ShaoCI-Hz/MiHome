@@ -1,9 +1,25 @@
 /** 设备详情页（全屏浮层）：完整属性/动作 + 设备信息，对齐米家设备详情 */
 import { useEffect, useRef, useState } from 'react';
-import type { MiDevice, PropValue } from '../api/types';
-import { findEnergyKey, getSpec, isUserFacingProp, type ControlDesc, type DeviceSpec } from '../api/spec';
+import type { MiDevice } from '../api/types';
+import {
+  findEnergyKey,
+  getSpec,
+  isUserFacingProp,
+  expandSpec,
+  type ActionDef,
+  type DeviceSpec,
+  type FullProp,
+} from '../api/spec';
 import { getDisplayName, getDevMode, setDisplayName, subscribeDevMode } from '../api/prefs';
 import { useApp } from '../api/store';
+import {
+  explainPropError,
+  schedulePropsFetch,
+  setPropFrozen,
+  setPropValue,
+  useDidFailed,
+  useDidValues,
+} from '../api/propsStore';
 
 /** 解析统计值：value 是 "[123.4]" 形式的字符串，取第一项 */
 function parseStatValue(raw: string): number {
@@ -29,62 +45,13 @@ function fmtConsumable(d: unknown): string {
   return line || JSON.stringify(o).slice(0, 80);
 }
 
-interface FullProp extends ControlDesc {
-  siid: number;
-  piid: number;
-  readonly?: boolean;
-}
-
-/** 从完整规格展开全部可读属性与可写控件 */
-function expandSpec(spec: DeviceSpec): { props: FullProp[]; actions: { siid: number; aiid: number; label: string; hasIn: boolean }[] } {
-  const props: FullProp[] = [];
-  const actions: { siid: number; aiid: number; label: string; hasIn: boolean }[] = [];
-  for (const svc of spec.services) {
-    const svcLabel = svc.label ?? svc.description ?? svc.type;
-    for (const p of svc.properties ?? []) {
-      const name = p.label ?? p.description ?? p.type;
-      if (p.type.startsWith('parent')) continue;
-      const access = p.access ?? [];
-      const canWrite = access.includes('write') || access.includes('readwrite');
-      const canRead = access.includes('read') || access.includes('notify');
-      if (!canRead && !canWrite) continue;
-      if (p.format === 'string' || p.format === 'object' || p.format === 'array') continue;
-      if (canWrite) {
-        let desc: FullProp;
-        if (p.format === 'bool') {
-          desc = { siid: svc.iid, piid: p.iid, kind: 'switch', label: name, urn: p.type };
-        } else if (p['value-range']) {
-          desc = { siid: svc.iid, piid: p.iid, kind: 'slider', label: name, urn: p.type, range: p['value-range'] };
-        } else if (p['value-list']) {
-          desc = {
-            siid: svc.iid, piid: p.iid, kind: 'enum', label: name, urn: p.type,
-            options: p['value-list'].map((o) => ({ value: o.value, label: o.label ?? o.description ?? String(o.value) })),
-          };
-        } else {
-          desc = { siid: svc.iid, piid: p.iid, kind: 'readonly', label: name, urn: p.type, readonly: true };
-        }
-        props.push({ ...desc, label: `${svcLabel} · ${name}` });
-      } else if (canRead) {
-        props.push({ siid: svc.iid, piid: p.iid, kind: 'readonly', label: `${svcLabel} · ${name}`, urn: p.type, readonly: true });
-      }
-    }
-    for (const a of svc.actions ?? []) {
-      if (a.type.startsWith('parent')) continue;
-      actions.push({
-        siid: svc.iid,
-        aiid: a.iid,
-        label: `${svcLabel} · ${a.label ?? a.description ?? a.type}`,
-        hasIn: (a.in ?? []).length > 0,
-      });
-    }
-  }
-  return { props, actions };
-}
-
 export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: () => void }) {
   const api = useApp((s) => s.api);
+  const offline = useApp((s) => s.offline);
   const [spec, setSpec] = useState<DeviceSpec | null>(null);
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  // 统一数据源：与设备卡片共用 propsStore（改动即同步、60s 轮询同节奏、失败码同口径）
+  const values = useDidValues(device.did);
+  const failed = useDidFailed(device.did);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dispName, setDispName] = useState(() => getDisplayName(device.did, device.name));
@@ -150,33 +117,24 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
       const s = await getSpec(device.model);
       if (dead || !s) return;
       setSpec(s);
-      const { props } = expandSpec(s);
-      try {
-        const keys = props.map((p) => ({ did: device.did, siid: p.siid, piid: p.piid }));
-        const ret = (await api.getDevicesProp(keys)) as PropValue[];
-        if (dead) return;
-        const map: Record<string, unknown> = {};
-        for (const r of ret) if (r.code === 0 || r.code === 1) map[`${r.siid}.${r.piid}`] = r.value;
-        setValues(map);
-      } catch {
-        /* ignore */
-      }
+      // 属性走统一仓库：立即拉一轮，后续跟随全局 60s 轮询自动更新
+      schedulePropsFetch([device.did]);
     })();
     return () => {
       dead = true;
     };
-  }, [api, device.did, device.model]);
+  }, [device.did, device.model]);
 
   const setProp = async (p: FullProp, value: unknown) => {
     const key = `${p.siid}.${p.piid}`;
     const prev = values[key];
-    setValues((v) => ({ ...v, [key]: value }));
+    setPropValue(device.did, p.siid, p.piid, value); // 乐观回显（卡片同步）
     setBusy(true);
     setMsg(null);
     try {
       await api.setDevicesProp({ did: device.did, siid: p.siid, piid: p.piid, value });
     } catch (e) {
-      setValues((v) => ({ ...v, [key]: prev }));
+      setPropValue(device.did, p.siid, p.piid, prev); // 失败回滚
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -189,7 +147,8 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
   const setPropSmooth = (p: FullProp, value: unknown) => {
     const key = `${p.siid}.${p.piid}`;
     const first = sliderPending.current === null;
-    setValues((v) => ({ ...v, [key]: value }));
+    setPropValue(device.did, p.siid, p.piid, value); // 乐观回显（卡片同步）
+    setPropFrozen(device.did, p.siid, p.piid, true); // 拖动中：轮询不覆盖本地回显
     sliderPending.current = {
       p,
       v: value,
@@ -205,21 +164,31 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
         try {
           await api.setDevicesProp({ did: device.did, siid: q.p.siid, piid: q.p.piid, value: q.v });
         } catch (e) {
-          setValues((v) => ({ ...v, [`${q.p.siid}.${q.p.piid}`]: q.prev }));
+          setPropValue(device.did, q.p.siid, q.p.piid, q.prev); // 失败回滚
           setMsg(e instanceof Error ? e.message : String(e));
+        } finally {
+          setPropFrozen(device.did, q.p.siid, q.p.piid, false); // 已提交/回滚，恢复轮询写入
         }
       })();
     }, 300);
   };
 
-  const runAct = async (siid: number, aiid: number, label: string) => {
+  /** 动作入参暂存：key = `${siid}.${aiid}.${piid}` */
+  const [actArgs, setActArgs] = useState<Record<string, unknown>>({});
+
+  const runAct = async (a: ActionDef, inValues?: unknown[]) => {
     setBusy(true);
     setMsg(null);
     try {
-      await api.runAction({ did: device.did, siid, aiid });
-      setMsg(`已执行：${label}`);
+      await api.runAction({
+        did: device.did,
+        siid: a.siid,
+        aiid: a.aiid,
+        ...(inValues && inValues.length ? { in: inValues } : {}),
+      });
+      setMsg(`已执行：${a.label}`);
     } catch (e) {
-      setMsg(`${label} 失败: ${e instanceof Error ? e.message : e}`);
+      setMsg(`${a.label} 失败: ${e instanceof Error ? e.message : e}`);
     } finally {
       setBusy(false);
     }
@@ -229,10 +198,12 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
   const expanded = (() => {
     if (!spec) return null;
     const full = expandSpec(spec);
-    if (devMode) return full;
+    if (devMode) return { ...full, hidden: 0 };
     return {
       props: full.props.filter((p) => isUserFacingProp(p.urn)),
       actions: [] as typeof full.actions,
+      // 消除"猜不到的隐藏"：明确告诉用户还有多少项被收起来了
+      hidden: full.props.filter((p) => !isUserFacingProp(p.urn)).length,
     };
   })();
   const extra = (device.extra ?? {}) as Record<string, unknown>;
@@ -358,7 +329,7 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
                     <span>{p.label}</span>
                     <button
                       className={`mi-power small ${val === true ? 'on' : ''}`}
-                      disabled={!device.isOnline || busy}
+                      disabled={!device.isOnline || busy || offline}
                       onClick={() => setProp(p, !(val === true))}
                     >
                       ⏻
@@ -378,7 +349,7 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
                       max={max}
                       step={step}
                       value={num}
-                      disabled={!device.isOnline}
+                      disabled={!device.isOnline || offline}
                       onChange={(e) => setPropSmooth(p, Number(e.target.value))}
                     />
                     <em>{num}</em>
@@ -391,7 +362,7 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
                     <span>{p.label}</span>
                     <select
                       value={String(val ?? '')}
-                      disabled={!device.isOnline || busy}
+                      disabled={!device.isOnline || busy || offline}
                       onChange={(e) => {
                         const opt = p.options!.find((o) => String(o.value) === e.target.value);
                         if (opt) setProp(p, opt.value);
@@ -405,13 +376,26 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
                   </div>
                 );
               }
+              // 只读项：无值时给可读原因（与卡片同一失败码口径）
+              const failCode = failed[key];
               return (
                 <div key={key} className="mi-detail-row">
                   <span>{p.label}</span>
-                  <b>{val === undefined ? '—' : String(val)}</b>
+                  <b className={val === undefined && failCode !== undefined ? 'mi-readonly-err' : ''}>
+                    {val !== undefined
+                      ? String(val)
+                      : failCode !== undefined
+                        ? explainPropError(failCode)
+                        : '—'}
+                  </b>
                 </div>
               );
             })}
+            {expanded && expanded.hidden > 0 && (
+              <div className="mi-detail-hidden-note">
+                另有 {expanded.hidden} 项高阶属性已隐藏，可在「我的 → 开发者模式」查看全部
+              </div>
+            )}
           </div>
 
           {/* 动作 */}
@@ -419,16 +403,65 @@ export function DeviceDetail({ device, onClose }: { device: MiDevice; onClose: (
             <div className="mi-detail-section">
               <div className="mi-detail-title">动作</div>
               <div className="mi-action-grid">
-                {expanded.actions.map((a) => (
-                  <button
-                    key={`${a.siid}.${a.aiid}`}
-                    disabled={!device.isOnline || busy || a.hasIn}
-                    title={a.hasIn ? '该动作需要参数，暂不支持' : undefined}
-                    onClick={() => runAct(a.siid, a.aiid, a.label)}
-                  >
-                    {a.label}
-                  </button>
-                ))}
+                {expanded.actions.map((a) =>
+                  a.hasIn ? (
+                    // 带参动作：内联参数输入 + 执行（此前被整体禁用）
+                    <div key={`${a.siid}.${a.aiid}`} className="mi-action-param">
+                      <span>{a.label}</span>
+                      {a.inDefs.map((d) => {
+                        const argKey = `${a.siid}.${a.aiid}.${d.piid}`;
+                        if (d.options) {
+                          return (
+                            <select
+                              key={argKey}
+                              value={String(actArgs[argKey] ?? '')}
+                              disabled={!device.isOnline || busy || offline}
+                              onChange={(e) => {
+                                const opt = d.options!.find((o) => String(o.value) === e.target.value);
+                                setActArgs((m) => ({ ...m, [argKey]: opt ? opt.value : undefined }));
+                              }}
+                            >
+                              <option value="">{d.label}…</option>
+                              {d.options.map((o) => (
+                                <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
+                              ))}
+                            </select>
+                          );
+                        }
+                        return (
+                          <input
+                            key={argKey}
+                            type="number"
+                            placeholder={d.label}
+                            min={d.range?.[0]}
+                            max={d.range?.[1]}
+                            step={d.range?.[2] ?? 1}
+                            disabled={!device.isOnline || busy || offline}
+                            onChange={(e) =>
+                              setActArgs((m) => ({ ...m, [argKey]: e.target.value === '' ? undefined : Number(e.target.value) }))
+                            }
+                          />
+                        );
+                      })}
+                      <button
+                        disabled={!device.isOnline || busy || offline}
+                        onClick={() =>
+                          runAct(a, a.inDefs.map((d) => actArgs[`${a.siid}.${a.aiid}.${d.piid}`]))
+                        }
+                      >
+                        执行
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      key={`${a.siid}.${a.aiid}`}
+                      disabled={!device.isOnline || busy || offline}
+                      onClick={() => runAct(a)}
+                    >
+                      {a.label}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
           )}

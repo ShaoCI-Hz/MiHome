@@ -6,7 +6,7 @@ import { extractControls, filterControlsForMode, getDeviceImage, getSpec, type C
 import { getDisplayName, getDevMode, subscribeDevMode } from '../api/prefs';
 import { toast } from './Toast';
 import { log } from '../api/log';
-import { schedulePropsFetch, setPropValue, useDidValues, useDidFailed, explainPropError, useProps } from '../api/propsStore';
+import { schedulePropsFetch, setPropValue, setPropFrozen, useDidValues, useDidFailed, explainPropError, useProps } from '../api/propsStore';
 import { useApp } from '../api/store';
 import { DeviceDetail } from './DeviceDetail';
 
@@ -87,12 +87,19 @@ export function DeviceCard({
   index?: number;
 }) {
   const api = useApp((s) => s.api);
+  const offline = useApp((s) => s.offline);
   const [img, setImg] = useState<string | null>(null);
   const [controls, setControls] = useState<ControlDesc[] | null>(null);
   // 属性值改由中心化仓库提供（批量拉取 + 统一轮询）
   const values = useDidValues(device.did);
   const failed = useDidFailed(device.did);
-  const updatedAt = useProps((s) => s.updatedAt);
+  // 新鲜度标签需要随时间更新，但不订阅全局 updatedAt（否则每轮轮询/回前台全量卡片重渲染）：
+  // 30s 一次轻量 tick + getState 读取即可
+  const [, setFreshTick] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setFreshTick((x) => x + 1), 30000);
+    return () => window.clearInterval(t);
+  }, []);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -194,6 +201,7 @@ export function DeviceCard({
       const key = `${c.siid}.${c.piid}`;
       const first = sliderPending.current === null;
       setPropValue(device.did, c.siid, c.piid, value);
+      setPropFrozen(device.did, c.siid, c.piid, true); // 拖动中：轮询不覆盖本地回显
       sliderPending.current = {
         c,
         v: value,
@@ -214,6 +222,8 @@ export function DeviceCard({
             setErr(msg);
             toast(`控制失败：${msg}`, 'err');
             log('滑条提交失败', device.did, p.c.label, msg);
+          } finally {
+            setPropFrozen(device.did, p.c.siid, p.c.piid, false); // 已提交/回滚，恢复轮询写入
           }
         })();
       }, 300);
@@ -266,6 +276,7 @@ export function DeviceCard({
 
   // 数据新鲜度标签（>90s 才提示，避免常驻噪音）
   const freshLabel = (() => {
+    const updatedAt = useProps.getState().updatedAt;
     if (!updatedAt) return '';
     const age = Math.floor((Date.now() - updatedAt) / 1000);
     if (age <= 90) return '';
@@ -306,6 +317,14 @@ export function DeviceCard({
   // 控件区开合（大卡常显）
   const detailOpen = expanded || size === 'l';
 
+  // 入场动画一次性：挂载后短时携带 mi-card--enter，随后移除。
+  // 避免排序/轮询改变 --card-i 时 animation-delay 变化触发重放
+  const [entering, setEntering] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setEntering(false), 900); // 0.36s + 0.32s delay 上限 + 余量
+    return () => window.clearTimeout(t);
+  }, []);
+
   const sensorUnit = (c?: ControlDesc) => {
     if (!c) return '';
     if (/temperature/i.test(c.urn)) return '°C';
@@ -315,7 +334,7 @@ export function DeviceCard({
 
   return (
     <div
-      className={`mi-card mi-card--${variant} mi-card--size-${size} ${device.isOnline ? '' : 'offline'} ${expanded ? 'expanded' : ''} ${editing ? 'editing' : ''} ${checked ? 'checked' : ''}`}
+      className={`mi-card mi-card--${variant} mi-card--size-${size} ${device.isOnline ? '' : 'offline'} ${expanded ? 'expanded' : ''} ${editing ? 'editing' : ''} ${checked ? 'checked' : ''} ${entering ? 'mi-card--enter' : ''}`}
       style={{ '--card-i': index ?? 0 } as CSSProperties}
       draggable={draggable}
       onDragStart={(e) => {
@@ -403,7 +422,7 @@ export function DeviceCard({
         {switchCtrl && (
           <button
             className={`mi-power ${isOn ? 'on' : ''}`}
-            disabled={!device.isOnline || busy}
+            disabled={!device.isOnline || busy || offline}
             onClick={(e) => {
               e.stopPropagation();
               setValue(switchCtrl, !isOn);
@@ -425,7 +444,7 @@ export function DeviceCard({
             max={dimmerCtrl.range?.[1] ?? 100}
             step={dimmerCtrl.range?.[2] ?? 1}
             value={typeof valOf(dimmerCtrl) === 'number' ? (valOf(dimmerCtrl) as number) : (dimmerCtrl.range?.[0] ?? 1)}
-            disabled={!device.isOnline}
+            disabled={!device.isOnline || offline}
             onChange={(e) => setSliderSmooth(dimmerCtrl, Number(e.target.value))}
           />
           <em>{fmtVal(dimmerCtrl)}</em>
@@ -437,6 +456,7 @@ export function DeviceCard({
         className={`mi-card-detail ${detailOpen ? 'is-open' : ''}`}
         onClick={(e) => e.stopPropagation()}
         aria-hidden={!detailOpen}
+        aria-expanded={detailOpen}
       >
         <div className="mi-card-detail-inner">
           {visible === null && <div className="mi-card-loading">加载控件…</div>}
@@ -460,7 +480,7 @@ export function DeviceCard({
                     max={max}
                     step={step}
                     value={num}
-                    disabled={!device.isOnline}
+                    disabled={!device.isOnline || offline}
                     onChange={(e) => setSliderSmooth(c, Number(e.target.value))}
                   />
                   <em>{num}</em>
@@ -473,7 +493,7 @@ export function DeviceCard({
                   <span>{c.label}</span>
                   <select
                     value={String(val ?? '')}
-                    disabled={!device.isOnline || busy}
+                    disabled={!device.isOnline || busy || offline}
                     onChange={(e) => {
                       const opt = c.options!.find((o) => String(o.value) === e.target.value);
                       if (opt) setValue(c, opt.value);

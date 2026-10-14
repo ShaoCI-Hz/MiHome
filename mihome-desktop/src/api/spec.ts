@@ -322,3 +322,89 @@ export function extractControls(spec: DeviceSpec): ControlDesc[] {
   // 避免"先截 4 个再过滤"把白名单项挤掉
   return out;
 }
+
+/* ===== 全量规格展开（详情页与属性轮询共用） ===== */
+
+export interface FullProp extends ControlDesc {
+  siid: number;
+  piid: number;
+  readonly?: boolean;
+}
+
+/** 动作入参定义（hasIn 动件的参数输入渲染依据） */
+export interface InDef {
+  piid: number;
+  format: string;
+  label: string;
+  range?: [number, number, number];
+  options?: { value: number | string; label: string }[];
+}
+
+export interface ActionDef {
+  siid: number;
+  aiid: number;
+  label: string;
+  hasIn: boolean;
+  /** 入参定义，按 spec action.in 顺序 */
+  inDefs: InDef[];
+}
+
+/** 从完整规格展开全部可读属性与可写控件（含只读与开发者模式高阶项） */
+export function expandSpec(spec: DeviceSpec): { props: FullProp[]; actions: ActionDef[] } {
+  const props: FullProp[] = [];
+  const actions: ActionDef[] = [];
+  for (const svc of spec.services) {
+    const svcLabel = svc.label ?? svc.description ?? svc.type;
+    const propByIid = new Map((svc.properties ?? []).map((p) => [p.iid, p]));
+    for (const p of svc.properties ?? []) {
+      const name = p.label ?? p.description ?? p.type;
+      if (p.type.startsWith('parent')) continue;
+      const access = p.access ?? [];
+      const canWrite = access.includes('write') || access.includes('readwrite');
+      const canRead = access.includes('read') || access.includes('notify');
+      if (!canRead && !canWrite) continue;
+      if (p.format === 'string' || p.format === 'object' || p.format === 'array') continue;
+      if (canWrite) {
+        let desc: FullProp;
+        if (p.format === 'bool') {
+          desc = { siid: svc.iid, piid: p.iid, kind: 'switch', label: name, urn: p.type };
+        } else if (p['value-range']) {
+          desc = { siid: svc.iid, piid: p.iid, kind: 'slider', label: name, urn: p.type, range: p['value-range'] };
+        } else if (p['value-list']) {
+          desc = {
+            siid: svc.iid, piid: p.iid, kind: 'enum', label: name, urn: p.type,
+            options: p['value-list'].map((o) => ({ value: o.value, label: o.label ?? o.description ?? String(o.value) })),
+          };
+        } else {
+          desc = { siid: svc.iid, piid: p.iid, kind: 'readonly', label: name, urn: p.type, readonly: true };
+        }
+        props.push({ ...desc, label: `${svcLabel} · ${name}` });
+      } else if (canRead) {
+        props.push({ siid: svc.iid, piid: p.iid, kind: 'readonly', label: `${svcLabel} · ${name}`, urn: p.type, readonly: true });
+      }
+    }
+    for (const a of svc.actions ?? []) {
+      if (a.type.startsWith('parent')) continue;
+      const inDefs: InDef[] = [];
+      for (const iid of a.in ?? []) {
+        const p = propByIid.get(iid);
+        if (!p) continue;
+        inDefs.push({
+          piid: p.iid,
+          format: p.format,
+          label: p.label ?? p.description ?? `参数${p.iid}`,
+          range: p['value-range'],
+          options: p['value-list']?.map((o) => ({ value: o.value, label: o.label ?? o.description ?? String(o.value) })),
+        });
+      }
+      actions.push({
+        siid: svc.iid,
+        aiid: a.iid,
+        label: `${svcLabel} · ${a.label ?? a.description ?? a.type}`,
+        hasIn: inDefs.length > 0,
+        inDefs,
+      });
+    }
+  }
+  return { props, actions };
+}

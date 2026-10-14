@@ -7,9 +7,10 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
 import { useApp } from './store';
-import { getSpec, extractControls } from './spec';
+import { getSpec, expandSpec } from './spec';
 import { log } from './log';
 import type { PropKey, PropValue } from './types';
+import { MiLoginError } from './types';
 
 /** 复合键：`${did}:${siid}.${piid}` */
 const propKey = (did: string, siid: number, piid: number) => `${did}:${siid}.${piid}`;
@@ -75,6 +76,14 @@ export function setPropValue(did: string, siid: number, piid: number, value: unk
   useProps.getState().patch({ [propKey(did, siid, piid)]: value });
 }
 
+/** 拖动中的属性 key：轮询回包跳过这些键，防止旧值覆盖本地回显（滑条回跳） */
+const frozenKeys = new Set<string>();
+export function setPropFrozen(did: string, siid: number, piid: number, on: boolean): void {
+  const k = propKey(did, siid, piid);
+  if (on) frozenKeys.add(k);
+  else frozenKeys.delete(k);
+}
+
 /** 提取某设备的全部属性切片（key 形如 `2.1`），配合 useShallow 避免无效重渲染 */
 function pickDid(values: Record<string, unknown>, did: string): Record<string, unknown> {
   const prefix = `${did}:`;
@@ -116,8 +125,9 @@ async function doFetch(dids: string[]): Promise<void> {
     try {
       const spec = await getSpec(dev.model);
       if (!spec) continue;
-      for (const c of extractControls(spec)) {
-        keys.push({ did, siid: c.siid, piid: c.piid });
+      // 全量可读属性（含只读与开发者模式项）：详情页与卡片共用同一仓库、同一刷新节奏
+      for (const p of expandSpec(spec).props) {
+        keys.push({ did, siid: p.siid, piid: p.piid });
       }
     } catch {
       /* 该设备 spec 失败，跳过 */
@@ -144,12 +154,22 @@ async function doFetch(dids: string[]): Promise<void> {
         }
       }
       const st = useProps.getState();
+      // 拖动未提交的键不覆盖（否则轮询旧值会让滑条回跳）
+      for (const k of Object.keys(next)) {
+        if (frozenKeys.has(k)) delete next[k];
+      }
       st.patch(next);
       st.markFailed(fails, oks);
       useProps.setState({ updatedAt: Date.now() });
       const failCount = Object.keys(fails).length;
       log(`批量属性: ${chunk.length} keys → ${Object.keys(next).length} 值${failCount ? `（${failCount} 项失败）` : ''}`);
     } catch (e) {
+      // 登录态失效（非网络抖动）→ 全链路回到登录页；其他失败保持静默重试（下轮轮询自愈）
+      if (e instanceof MiLoginError && e.expired) {
+        log('批量属性：登录态失效，触发自愈');
+        useApp.getState().sessionExpired();
+        return;
+      }
       log('批量属性请求失败 -', e);
     }
   }

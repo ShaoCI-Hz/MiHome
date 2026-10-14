@@ -6,6 +6,8 @@ import { deleteAuth, loadAuth, saveAuth } from './storage';
 import { schedulePropsFetch } from './propsStore';
 import { log } from './log';
 import type { MiDevice, MiHome, MiRoom, MiScene, QrLoginData } from './types';
+import { MiLoginError } from './types';
+import { saveDataCache, loadDataCache, cacheAgeText } from './cache';
 
 export type AppPhase = 'loading' | 'login' | 'ready';
 
@@ -21,6 +23,8 @@ interface AppState {
   currentRooms: MiRoom[];
   loading: boolean;
   error: string | null;
+  /** 离线模式：网络不可用，展示本地缓存数据（只读，控制不可用） */
+  offline: boolean;
   /** 最近一次二维码登录数据（长轮询用） */
   lastQrData: QrLoginData | null;
 
@@ -36,6 +40,8 @@ interface AppState {
   refresh: () => Promise<void>;
   /** 清除全局错误提示 */
   clearError: () => void;
+  /** 登录态失效：回到登录页并提示（全链路自愈入口） */
+  sessionExpired: () => void;
   /** 退出登录 */
   logout: () => Promise<void>;
 }
@@ -62,6 +68,29 @@ export const useApp = create<AppState>((set, get) => {
       set({ homes, currentHomeId: homes[0] ? String(homes[0].id) : null });
       if (homes[0]) await get().selectHome(String(homes[0].id));
     } catch (e) {
+      if (e instanceof MiLoginError && e.expired) {
+        get().sessionExpired();
+        return;
+      }
+      // 网络问题且有缓存 → 降级为离线只读，而不是打回登录页
+      if (e instanceof MiLoginError && !e.expired) {
+        const cache = loadDataCache();
+        if (cache) {
+          log('loadHomes 网络失败，降级离线模式');
+          set({
+            phase: 'ready',
+            offline: true,
+            loading: false,
+            homes: cache.homes,
+            currentHomeId: cache.currentHomeId,
+            devices: cache.devices,
+            scenes: cache.scenes,
+            currentRooms: cache.currentRooms,
+            error: `网络不可用，正在离线浏览缓存数据（${cacheAgeText(cache.savedAt)}）`,
+          });
+          return;
+        }
+      }
       const msg = e instanceof Error ? e.message : String(e);
       log('loadHomes 失败 -', msg);
       set({ phase: 'login', loading: false, error: `加载数据失败: ${msg}` });
@@ -79,6 +108,7 @@ export const useApp = create<AppState>((set, get) => {
     currentRooms: [],
     loading: false,
     error: null,
+    offline: false,
     lastQrData: null,
 
     init: async () => {
@@ -91,9 +121,35 @@ export const useApp = create<AppState>((set, get) => {
           const ok = await client.checkAvailable();
           log('已存凭据 checkAvailable =>', ok, '|', client.lastDiag);
           if (ok) {
-            set({ phase: 'ready' });
+            set({ phase: 'ready', offline: false });
             await loadHomes();
             return;
+          }
+          // 探测失败：先试静默刷新（可能只是 serviceToken 过期，passToken 还能救）
+          const refreshed = await client.tryRefresh();
+          if (refreshed) {
+            await saveAuth(client.auth);
+            set({ phase: 'ready', offline: false });
+            await loadHomes();
+            return;
+          }
+          // 网络问题且有缓存 → 离线只读模式（不再"接口一抖就变砖"）
+          if (client.lastRefreshVerdict === 'network') {
+            const cache = loadDataCache();
+            if (cache) {
+              log('init: 网络不可用，进入离线模式，缓存于', cacheAgeText(cache.savedAt));
+              set({
+                phase: 'ready',
+                offline: true,
+                homes: cache.homes,
+                currentHomeId: cache.currentHomeId,
+                devices: cache.devices,
+                scenes: cache.scenes,
+                currentRooms: cache.currentRooms,
+                error: `网络不可用，正在离线浏览缓存数据（${cacheAgeText(cache.savedAt)}）`,
+              });
+              return;
+            }
           }
         }
       } catch (e) {
@@ -159,11 +215,25 @@ export const useApp = create<AppState>((set, get) => {
           scenes,
           currentRooms: home?.roomlist ?? [],
           loading: false,
+          offline: false,
+        });
+        // 快照落盘，供网络异常时离线只读展示
+        const st = get();
+        saveDataCache({
+          homes: st.homes,
+          currentHomeId: homeId,
+          devices,
+          scenes,
+          currentRooms: home?.roomlist ?? [],
         });
         // 列表就绪后立即批量拉一轮属性（并接管后续轮询）
         schedulePropsFetch(devices.map((d) => d.did));
       } catch (e) {
         log('selectHome 失败 -', e);
+        if (e instanceof MiLoginError && e.expired) {
+          get().sessionExpired();
+          return;
+        }
         set({ loading: false, error: e instanceof Error ? e.message : String(e) });
       }
     },
@@ -179,13 +249,41 @@ export const useApp = create<AppState>((set, get) => {
           api.getScenesList(currentHomeId, homes).catch(() => scenes),
         ]);
         // 成功即清除历史错误，避免网络抖动的错误常驻误导
-        set({ devices, scenes: newScenes, loading: false, error: null });
+        set({ devices, scenes: newScenes, loading: false, error: null, offline: false });
+        const st = get();
+        saveDataCache({
+          homes: st.homes,
+          currentHomeId,
+          devices,
+          scenes: newScenes,
+          currentRooms: st.currentRooms,
+        });
       } catch (e) {
+        if (e instanceof MiLoginError && e.expired) {
+          get().sessionExpired();
+          return;
+        }
         set({ loading: false, error: e instanceof Error ? e.message : String(e) });
       }
     },
 
     clearError: () => set({ error: null }),
+
+    sessionExpired: () => {
+      cancelLoginPoll();
+      log('sessionExpired: 登录态失效，回到登录页');
+      set({
+        phase: 'login',
+        loading: false,
+        error: '登录已过期，请重新扫码',
+        homes: [],
+        devices: [],
+        scenes: [],
+        currentRooms: [],
+        currentHomeId: null,
+        lastQrData: null,
+      });
+    },
 
     logout: async () => {
       cancelLoginPoll();

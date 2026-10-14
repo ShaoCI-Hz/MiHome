@@ -168,7 +168,9 @@ export class MiClient {
   /**
    * 尝试用 passToken 静默刷新 token。
    * 成功返回 true（auth 已更新），失败返回 false（需要扫码）。
+   * 失败时同步 lastRefreshVerdict：'expired'=凭据确实失效，'network'=探测/请求异常（可能只是断网）。
    */
+  lastRefreshVerdict: 'expired' | 'network' = 'network';
   async tryRefresh(): Promise<boolean> {
     const diag: string[] = [];
     try {
@@ -187,12 +189,21 @@ export class MiClient {
           this.lastDiag = diag.join(' | ');
           return true;
         }
+        // 服务端正常应答但确认页不是 ok（跳登录页）→ 凭据失效
+        this.lastRefreshVerdict = 'expired';
       } else if (data.location) {
         diag.push(`location=${data.location.slice(0, 80)}`);
+        // 有 location 但 code≠0（如需重新登录）→ 凭据失效
+        this.lastRefreshVerdict = data.code === 0 ? 'network' : 'expired';
+      } else {
+        // code≠0 且无 location → 凭据失效
+        this.lastRefreshVerdict = 'expired';
       }
       this.lastDiag = diag.join(' | ');
       return false;
     } catch (e) {
+      // 请求异常（断网/超时/DNS）→ 不能断定凭据失效
+      this.lastRefreshVerdict = 'network';
       this.lastDiag = `${diag.join(' | ')} | EX=${e instanceof Error ? e.message : String(e)}`;
       return false;
     }
@@ -351,9 +362,14 @@ export class MiClient {
       this.invalidateAvailable();
       return;
     }
+    // 仅当刷新失败可断定凭据失效时才标记 expired（网络问题不应把用户踢回登录页）
+    const expired = this.lastRefreshVerdict === 'expired';
     throw new MiLoginError(
       -1,
-      `登录已过期，请重新扫码\n[探测] ${checkDiag}\n[刷新] ${this.lastDiag}`,
+      expired
+        ? `登录已过期，请重新扫码\n[探测] ${checkDiag}\n[刷新] ${this.lastDiag}`
+        : `网络异常，登录状态无法确认\n[探测] ${checkDiag}\n[刷新] ${this.lastDiag}`,
+      expired,
     );
   }
 }

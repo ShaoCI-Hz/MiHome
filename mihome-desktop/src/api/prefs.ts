@@ -7,6 +7,7 @@ const RENAME_KEY = 'mi-rename-map';
 const ORDER_KEY = 'mi-card-order';
 const THEME_KEY = 'mi-theme';
 const DEV_KEY = 'mi-dev-mode';
+const CLOSE_TRAY_KEY = 'mi-close-to-tray';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
 export type SortMode = 'online' | 'name' | 'type' | 'order';
@@ -105,8 +106,17 @@ export function applyTheme(): void {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
 }
 
-/* ===== 开发者模式（默认关闭=易用模式，仅显示核心控制项） ===== */
+/* ===== 关闭行为（隐藏到托盘 / 直接退出，默认隐藏到托盘） ===== */
 
+export function getCloseToTrayPref(): boolean {
+  return readJson<boolean>(CLOSE_TRAY_KEY, true);
+}
+
+export function setCloseToTrayPref(v: boolean): void {
+  writeJson(CLOSE_TRAY_KEY, v);
+}
+
+/* ===== 开发者模式（默认关闭=易用模式，仅显示核心控制项） ===== */
 const DEV_EVENT = 'mi-dev-mode-change';
 const devListeners = new Set<() => void>();
 

@@ -19,7 +19,9 @@ export interface ActionParam {
   did: string;
   siid: number;
   aiid: number;
-  value?: unknown[];
+  /** 动作入参（对应 spec action.in 各属性的值，按顺序）。字段名依 miot-spec 协议；
+   *  无入参动作不传。若带参执行被服务端拒绝，请抓包核对字段名后再改 */
+  in?: unknown[];
 }
 
 export class MiHomeApi {

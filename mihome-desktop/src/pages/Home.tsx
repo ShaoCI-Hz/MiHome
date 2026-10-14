@@ -8,6 +8,8 @@ import {
   applyOrder,
   applyTheme,
   getThemePref,
+  getCloseToTrayPref,
+  setCloseToTrayPref,
   getDevMode,
   setDevMode,
   subscribeDevMode,
@@ -19,6 +21,7 @@ import {
 } from '../api/prefs';
 import { extractControls, getSpec } from '../api/spec';
 import { CommandPalette } from '../components/CommandPalette';
+import { SchedulePanel } from '../components/SchedulePanel';
 import { feedback } from '../api/tray';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -29,7 +32,7 @@ type Tab = 'devices' | 'scenes' | 'me';
 export function Home() {
   const {
     homes, currentHomeId, devices, scenes, currentRooms,
-    loading, error, selectHome, refresh, logout, clearError,
+    loading, error, offline, selectHome, refresh, logout, clearError,
   } = useApp();
   const [tab, setTab] = useState<Tab>('devices');
   const [roomIdx, setRoomIdx] = useState(0); // 0 = 全部
@@ -40,7 +43,7 @@ export function Home() {
   const [orderTick, setOrderTick] = useState(0); // 拖拽保存后触发重排
   const [theme, setTheme] = useState<ThemePref>(() => getThemePref());
   const [autostart, setAutostart] = useState(false);
-  const [closeToTray, setCloseToTray] = useState(true); // 关闭行为
+  const [closeToTray, setCloseToTray] = useState(() => getCloseToTrayPref()); // 关闭行为（本地记忆）
   const [appVersion, setAppVersion] = useState(''); // 运行时版本
   const [runningScene, setRunningScene] = useState<string | null>(null); // 场景执行中
   // 开发者模式（默认关）：开启后设备详情/卡片显示 miot-spec 全部控制项
@@ -51,12 +54,17 @@ export function Home() {
   const [paletteOpen, setPaletteOpen] = useState(false); // Ctrl+K 命令面板
   const dragDid = useRef<string | null>(null);
 
-  // 全局快捷键：Ctrl+K / Ctrl+F 开关命令面板；Esc 退出编辑/搜索
+  // 全局快捷键：Ctrl+K / Ctrl+F 开关命令面板；Ctrl+1/2/3 切换侧栏页签；Esc 退出编辑/搜索
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'f')) {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && ['1', '2', '3'].includes(e.key)) {
+        e.preventDefault();
+        setTab((['devices', 'scenes', 'me'] as const)[Number(e.key) - 1]);
         return;
       }
       if (e.key === 'Escape') {
@@ -72,6 +80,8 @@ export function Home() {
   // 开机自启状态
   useEffect(() => {
     autostartIsEnabled().then(setAutostart).catch(() => undefined);
+    // 关闭行为：把本地记忆同步给 Rust（重启后不再是硬编码默认值）
+    invoke('set_close_to_tray', { v: getCloseToTrayPref() }).catch(() => undefined);
     // 运行时版本（消除 0.1.0/0.1.1/dev 三处硬编码不一致）
     void import('@tauri-apps/api/app')
       .then((m) => m.getVersion())
@@ -91,10 +101,11 @@ export function Home() {
     }
   };
 
-  // 关闭行为开关（真实写入 Rust，不是本地摆设）
+  // 关闭行为开关（真实写入 Rust + 本地记忆，不是本地摆设）
   const toggleCloseToTray = async () => {
     const next = !closeToTray;
     setCloseToTray(next);
+    setCloseToTrayPref(next);
     try {
       await invoke('set_close_to_tray', { v: next });
       log('关闭行为', next ? '隐藏到托盘' : '直接退出');
@@ -142,6 +153,8 @@ export function Home() {
 
   // 批量开/关：收集全部开关指令后走协议批量写（原 N 次串行 → 1 次请求）
   const batchSet = async (value: boolean) => {
+    // 关闭是不可逆的硬件动作（夜里全屋断电类误触代价高），二次确认；开启保持一键
+    if (!value && !window.confirm(`确定关闭所选 ${selected.size} 台设备？`)) return;
     setBatchBusy(true);
     const { api, devices: latest } = useApp.getState();
     const params: { did: string; siid: number; piid: number; value: unknown }[] = [];
@@ -246,6 +259,47 @@ export function Home() {
 
   return (
     <div className="mi-page">
+      {/* ===== 侧边导航（桌面布局：左侧固定导航栏） ===== */}
+      <nav className="mi-sidebar" role="tablist" aria-orientation="vertical" aria-label="主导航">
+        <div className="mi-sidebar-brand">
+          <span aria-hidden>🏠</span>
+          <b>MiHome</b>
+        </div>
+        <button
+          role="tab"
+          aria-selected={tab === 'devices'}
+          className={tab === 'devices' ? 'active' : ''}
+          onClick={() => setTab('devices')}
+          title="设备（Ctrl+1）"
+        >
+          <span className="mi-side-icon" aria-hidden>🏠</span>
+          <span>设备</span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'scenes'}
+          className={tab === 'scenes' ? 'active' : ''}
+          onClick={() => setTab('scenes')}
+          title="场景（Ctrl+2）"
+        >
+          <span className="mi-side-icon" aria-hidden>⚡</span>
+          <span>场景</span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'me'}
+          className={tab === 'me' ? 'active' : ''}
+          onClick={() => setTab('me')}
+          title="我的（Ctrl+3）"
+        >
+          <span className="mi-side-icon" aria-hidden>👤</span>
+          <span>我的</span>
+        </button>
+        {appVersion && <div className="mi-sidebar-version">v{appVersion}</div>}
+      </nav>
+
+      {/* ===== 主内容列 ===== */}
+      <div className="mi-main-col">
       {/* ===== 顶栏：家庭切换 ===== */}
       <header className="mi-header">
         <div className="mi-home-picker">
@@ -295,7 +349,16 @@ export function Home() {
         </div>
       )}
 
-      {error && (
+      {offline && (
+        <div className="mi-error mi-offline-banner">
+          <span>📡 当前离线：显示的是缓存数据，控制操作不可用</span>
+          <div className="mi-error-actions">
+            <button onClick={() => refresh()} disabled={loading}>重新连接</button>
+          </div>
+        </div>
+      )}
+
+      {error && !offline && (
         <div className="mi-error">
           <span>{error}</span>
           <div className="mi-error-actions">
@@ -392,6 +455,7 @@ export function Home() {
               ))}
             </div>
           )}
+          <SchedulePanel scenes={scenes} currentHomeId={currentHomeId} />
         </main>
       )}
 
@@ -431,6 +495,9 @@ export function Home() {
               <span>开机自启</span>
               <button
                 className={`mi-toggle ${autostart ? 'on' : ''}`}
+                role="switch"
+                aria-checked={autostart}
+                aria-label="开机自启"
                 onClick={() => toggleAutostart()}
               >
                 <span className="mi-toggle-knob" />
@@ -440,6 +507,9 @@ export function Home() {
               <span title="关闭窗口时隐藏到托盘后台运行；关闭后程序不退出">关闭窗口行为</span>
               <button
                 className={`mi-toggle ${closeToTray ? 'on' : ''}`}
+                role="switch"
+                aria-checked={closeToTray}
+                aria-label="关闭窗口时隐藏到托盘"
                 onClick={() => toggleCloseToTray()}
               >
                 <span className="mi-toggle-knob" />
@@ -458,6 +528,9 @@ export function Home() {
               <span title="开启后显示设备的全部高阶控制项（电压/电流/厂商自定义等）">开发者模式</span>
               <button
                 className={`mi-toggle ${devMode ? 'on' : ''}`}
+                role="switch"
+                aria-checked={devMode}
+                aria-label="开发者模式"
                 onClick={() => setDevMode(!devMode)}
               >
                 <span className="mi-toggle-knob" />
@@ -493,22 +566,7 @@ export function Home() {
           <p className="mi-about">非官方客户端 · 凭据仅存于本机系统凭据管理器</p>
         </main>
       )}
-
-      {/* ===== 底部导航 ===== */}
-      <footer className="mi-tabbar">
-        <button className={tab === 'devices' ? 'active' : ''} onClick={() => setTab('devices')}>
-          <span className="mi-tab-icon">🏠</span>
-          <span>设备</span>
-        </button>
-        <button className={tab === 'scenes' ? 'active' : ''} onClick={() => setTab('scenes')}>
-          <span className="mi-tab-icon">⚡</span>
-          <span>场景</span>
-        </button>
-        <button className={tab === 'me' ? 'active' : ''} onClick={() => setTab('me')}>
-          <span className="mi-tab-icon">👤</span>
-          <span>我的</span>
-        </button>
-      </footer>
+      </div>
 
       {/* Ctrl+K 命令面板 */}
       <CommandPalette

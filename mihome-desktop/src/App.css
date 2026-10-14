@@ -7,17 +7,32 @@
   --mi-bg: rgba(242, 243, 245, 0.74);
   --mi-card: rgba(255, 255, 255, 0.78);
   --mi-text: #333333;
-  --mi-sub: #999999;
+  /* 次级文字：对白底 5.1:1（WCAG AA） */
+  --mi-sub: #6b6e76;
   --mi-blue: #3482ff;
   --mi-blue-dark: #2569e6;
+  /* 文本蓝与蓝底白字：白字压 --mi-btn-bg 为 4.95:1，蓝字压白底为 4.95:1（AA） */
+  --mi-blue-text: #2569e6;
+  --mi-btn-bg: #2569e6;
+  --mi-btn-bg-hover: #1e56c8;
+  /* 占位符文字（AA 4.5:1） */
+  --mi-placeholder: #767676;
+  /* 通用表面/边框（深色模式下重定义，新组件引用即自动适配） */
+  --mi-surface-2: #f7f8fa;
+  --mi-border: #e0e1e4;
+  --mi-border-soft: rgba(0, 0, 0, 0.06);
+  /* 信息块（详情页提示条） */
+  --mi-info-bg: #eef6ff;
   --mi-danger: #fa5151;
   --mi-radius: 16px;
   --mi-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  /* 统一动效令牌（专家方案） */
+  /* 统一动效令牌（专家方案）：入场 0.32s / 出场 0.28s / 交互 0.12-0.16s 三档 */
   --mi-ease-page: cubic-bezier(0.32, 0.72, 0, 1);
   --mi-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --mi-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --mi-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --mi-tap-ease: cubic-bezier(0.2, 0, 0, 1);
+  /* 开合时长（卡片展开、visibility 延迟共用） */
+  --mi-dur-expand: 0.28s;
 }
 
 * {
@@ -90,11 +105,11 @@ button {
   padding: 36px 32px;
   text-align: center;
   background: var(--mi-card);
-  border-radius: 24px;
+  border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
 }
 .login-card h1 {
-  font-size: 24px;
+  font-size: 28px;
   margin-bottom: 6px;
   letter-spacing: 1px;
 }
@@ -103,12 +118,36 @@ button {
   font-size: 14px;
   margin-bottom: 20px;
 }
+/* 扫码三步引导（新手不再靠猜） */
+.login-steps {
+  list-style: none;
+  counter-reset: step;
+  text-align: left;
+  margin: -10px 0 16px;
+  padding: 10px 14px;
+  background: rgba(52, 130, 255, 0.06);
+  border-radius: 12px;
+}
+.login-steps li {
+  counter-increment: step;
+  font-size: 12px;
+  color: var(--mi-text);
+  line-height: 1.9;
+}
+.login-steps li::before {
+  content: counter(step) '.';
+  color: var(--mi-blue-text);
+  font-weight: 600;
+  margin-right: 6px;
+}
+.login-steps b { font-weight: 600; }
+.qr-tip-stale { color: var(--mi-danger); padding-top: 0; font-size: 12px; }
 .error-banner {
   margin: 0 0 14px;
   padding: 8px 12px;
   background: rgba(250, 81, 81, 0.08);
   border: 1px solid rgba(250, 81, 81, 0.25);
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 12px;
   color: var(--mi-danger);
   text-align: left;
@@ -140,14 +179,14 @@ button {
 .qr-error { text-align: center; padding: 16px; }
 .qr-error p {
   color: var(--mi-danger);
-  font-size: 13px;
+  font-size: 14px;
   margin-bottom: 12px;
   word-break: break-all;
   white-space: pre-wrap;
   text-align: left;
 }
 .qr-error button {
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
   border-radius: 999px;
   padding: 8px 22px;
@@ -162,7 +201,8 @@ button {
 .mi-page {
   height: 100%;
   display: flex;
-  flex-direction: column;
+  /* 桌面布局：侧边导航 + 主内容列 */
+  flex-direction: row;
   /* 必须透明：毛玻璃底色只由 body 提供一层 */
   background: transparent;
 }
@@ -195,14 +235,14 @@ button {
 .mi-home-caret {
   position: absolute;
   right: 2px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--mi-sub);
   pointer-events: none;
 }
 .mi-header-actions { display: flex; gap: 8px; }
 .mi-icon-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--mi-card);
   box-shadow: var(--mi-shadow);
@@ -214,7 +254,7 @@ button {
 }
 .mi-icon-btn:disabled { opacity: 0.5; }
 .mi-icon-btn.active {
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
 }
 
@@ -224,7 +264,7 @@ button {
   padding: 8px 12px;
   background: rgba(250, 81, 81, 0.08);
   border: 1px solid rgba(250, 81, 81, 0.25);
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 12px;
   color: var(--mi-danger);
   white-space: pre-wrap;
@@ -262,7 +302,7 @@ button {
   flex-shrink: 0;
   padding: 7px 16px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   background: var(--mi-card);
   color: #666;
   box-shadow: var(--mi-shadow);
@@ -271,9 +311,8 @@ button {
 }
 .mi-rooms button:active { transform: scale(0.94); }
 .mi-rooms button.active {
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
-  animation: pill-pop 0.24s var(--mi-ease-spring);
 }
 
 /* 内容区 */
@@ -285,7 +324,7 @@ button {
 .mi-content::-webkit-scrollbar { width: 6px; }
 .mi-content::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12);
-  border-radius: 3px;
+  border-radius: 8px;
 }
 .mi-empty {
   color: var(--mi-sub);
@@ -294,8 +333,13 @@ button {
   padding: 48px 0;
   white-space: pre-wrap;
 }
+/* 离线降级横幅：区别于错误条（无破坏性语调） */
+.mi-offline-banner {
+  border-left: 3px solid var(--mi-blue);
+  background: rgba(52, 130, 255, 0.08);
+}
 .mi-section-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   margin: 10px 2px 12px;
 }
@@ -321,10 +365,10 @@ button {
   padding: 14px;
   box-shadow: var(--mi-shadow);
   cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.12s;
+  transition: transform 0.12s var(--mi-tap-ease), box-shadow 0.12s var(--mi-ease-out);
 }
 .mi-card:hover {
-  transform: translateY(-1px);
+  /* 只留阴影变化：1px 位移肉眼不可见，只换来重绘 */
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.07);
 }
 .mi-card.offline { opacity: 0.55; }
@@ -333,9 +377,9 @@ button {
 .mi-card--size-s {
   padding: 10px 12px;
 }
-.mi-card--size-s .mi-card-img { width: 40px; height: 40px; border-radius: 10px; }
+.mi-card--size-s .mi-card-img { width: 40px; height: 40px; border-radius: 12px; }
 .mi-card--size-s .mi-card-emoji { font-size: 20px; }
-.mi-card--size-s .mi-card-name { font-size: 13px; }
+.mi-card--size-s .mi-card-name { font-size: 14px; }
 .mi-card--size-s .mi-power { width: 28px; height: 28px; }
 .mi-card--size-s .mi-power svg { width: 14px; height: 14px; }
 
@@ -343,10 +387,10 @@ button {
   grid-column: 1 / -1; /* 占满整行的横排大卡 */
   padding: 18px 20px;
 }
-.mi-card--size-l .mi-card-img { width: 84px; height: 84px; border-radius: 18px; }
-.mi-card--size-l .mi-card-emoji { font-size: 42px; }
-.mi-card--size-l .mi-card-name { font-size: 17px; }
-.mi-card--size-l .mi-card-status { font-size: 13px; margin-top: 6px; }
+.mi-card--size-l .mi-card-img { width: 84px; height: 84px; border-radius: 16px; }
+.mi-card--size-l .mi-card-emoji { font-size: 44px; }
+.mi-card--size-l .mi-card-name { font-size: 16px; }
+.mi-card--size-l .mi-card-status { font-size: 14px; margin-top: 6px; }
 .mi-card--size-l .mi-power { width: 42px; height: 42px; }
 .mi-card--size-l .mi-power svg { width: 21px; height: 21px; }
 .mi-card--size-l .mi-sensor-value { font-size: 44px; }
@@ -375,17 +419,17 @@ button {
   border: none;
 }
 .mi-size-picker button.active {
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
 }
 .mi-edit-btn {
   width: auto !important;
   padding: 0 14px !important;
   border-radius: 999px !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
 }
 .mi-edit-btn.active {
-  background: var(--mi-blue) !important;
+  background: var(--mi-btn-bg) !important;
   color: #fff !important;
 }
 
@@ -402,10 +446,9 @@ button {
   border: none;
   background: var(--mi-card);
   box-shadow: var(--mi-shadow);
-  outline: none;
   color: var(--mi-text);
 }
-.mi-search-bar input::placeholder { color: #bbb; }
+.mi-search-bar input::placeholder { color: var(--mi-placeholder); }
 
 /* 卡片内详情入口 */
 .mi-detail-actions {
@@ -416,7 +459,7 @@ button {
 }
 .mi-detail-link {
   font-size: 12px;
-  color: var(--mi-blue);
+  color: var(--mi-blue-text);
   background: none;
   border: none;
   padding: 2px 0;
@@ -429,7 +472,7 @@ button {
   border-radius: 999px;
   padding: 5px 14px;
 }
-.mi-collapse:hover { color: var(--mi-blue); }
+.mi-collapse:hover { color: var(--mi-blue-text); }
 
 /* ===== 设备详情页（全屏浮层） ===== */
 .mi-detail-overlay {
@@ -441,31 +484,29 @@ button {
   justify-content: flex-end;
   animation: overlay-in 0.26s var(--mi-ease-out);
 }
-.mi-detail-overlay.closing { animation: overlay-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+.mi-detail-overlay.closing { animation: overlay-out 0.28s var(--mi-ease-in) forwards; }
 .mi-detail {
   width: min(440px, 92vw);
   height: 100%;
   /* 详情侧板高不透明：避免透出遮罩与页面内容显脏 */
   background: rgba(246, 247, 249, 0.95);
-  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.15);
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   animation: panel-in 0.34s var(--mi-ease-page);
 }
-.mi-detail.closing { animation: panel-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+.mi-detail.closing { animation: panel-out 0.28s var(--mi-ease-in) forwards; }
 [data-theme='dark'] .mi-detail { background: rgba(27, 28, 31, 0.95); }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes panel-in { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes panel-out { from { transform: none; } to { transform: translateX(100%); } }
-/* 详情区块依次入场（仅前 4 个，行级不动画） */
-.mi-detail-body > * {
-  animation: section-in 0.3s var(--mi-ease-out) backwards;
+/* 详情内容入场：容器级一次播放。
+   （原来按子元素 stagger，但规格是异步到达的：面板滑入完成后新挂载的区块
+   又各自滑入一次，视觉断裂。容器化后与面板同一时间轴，只播一次） */
+.mi-detail-body {
+  animation: section-in 0.3s var(--mi-ease-out) 0.1s backwards;
 }
-.mi-detail-body > *:nth-child(1) { animation-delay: 0.02s; }
-.mi-detail-body > *:nth-child(2) { animation-delay: 0.06s; }
-.mi-detail-body > *:nth-child(3) { animation-delay: 0.1s; }
-.mi-detail-body > *:nth-child(n + 4) { animation-delay: 0.14s; }
 @keyframes section-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
@@ -477,13 +518,13 @@ button {
   padding: 14px 16px;
   background: var(--mi-card);
   border-bottom: 1px solid #f0f1f3;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
 }
 .mi-back {
   font-size: 14px;
   font-weight: 500;
-  color: var(--mi-blue);
+  color: var(--mi-blue-text);
   background: none;
   border: none;
   padding: 0;
@@ -505,7 +546,7 @@ button {
 .mi-detail-body::-webkit-scrollbar { width: 6px; }
 .mi-detail-body::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12);
-  border-radius: 3px;
+  border-radius: 8px;
 }
 
 .mi-detail-hero {
@@ -515,9 +556,9 @@ button {
   box-shadow: var(--mi-shadow);
   margin-bottom: 14px;
 }
-.mi-detail-hero h2 { font-size: 19px; }
+.mi-detail-hero h2 { font-size: 20px; }
 .mi-detail-hero p {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--mi-sub);
   margin-top: 5px;
 }
@@ -530,13 +571,13 @@ button {
   margin-bottom: 14px;
 }
 .mi-detail-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--mi-sub);
   margin-bottom: 10px;
 }
 .mi-detail-loading {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--mi-sub);
   padding: 8px 0;
 }
@@ -554,7 +595,7 @@ button {
 }
 .mi-info-grid span { font-size: 12px; color: var(--mi-sub); }
 .mi-info-grid b {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -588,7 +629,7 @@ button {
 }
 .mi-detail-row select {
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   background: #f7f8fa;
   border: 1px solid #e5e6eb;
   border-radius: 8px;
@@ -598,14 +639,14 @@ button {
 .mi-detail-row.slider input[type='range'] { flex: 1; accent-color: var(--mi-blue); }
 .mi-detail-row.slider em {
   font-style: normal;
-  font-size: 13px;
+  font-size: 14px;
   width: 36px;
   text-align: right;
 }
 .mi-power.small {
-  width: 30px;
-  height: 30px;
-  font-size: 15px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
 }
 
 .mi-action-grid {
@@ -614,22 +655,159 @@ button {
   gap: 8px;
 }
 .mi-action-grid button {
-  font-size: 13px;
+  font-size: 14px;
   padding: 8px 14px;
   border-radius: 999px;
   background: #f2f3f5;
   color: var(--mi-text);
   border: none;
 }
-.mi-action-grid button:hover:not(:disabled) { background: #e8f1ff; color: var(--mi-blue); }
+.mi-action-grid button:hover:not(:disabled) { background: #e8f1ff; color: var(--mi-blue-text); }
+/* 带参动作：参数行 + 执行按钮 */
+.mi-action-param {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+}
+.mi-action-param > span {
+  font-size: 14px;
+  font-weight: 500;
+  margin-right: auto;
+}
+.mi-action-param select,
+.mi-action-param input {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid #e0e1e4;
+  background: transparent;
+  color: var(--mi-text);
+  max-width: 120px;
+}
+.mi-action-param button {
+  font-size: 12px;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: var(--mi-btn-bg);
+  color: #fff;
+}
+/* 易用模式隐藏项提示（消除"猜不到的隐藏"） */.mi-detail-hidden-note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--mi-sub);
+  padding: 6px 10px;
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+}
+.mi-readonly-err { color: var(--mi-danger); font-weight: 500; }
+
+/* ===== 本地定时任务 ===== */
+.mi-schedule { margin-top: 18px; }
+.mi-schedule .mi-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mi-schedule-add {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mi-blue-text);
+  padding: 4px 12px;
+  border: 1px solid var(--mi-border);
+  border-radius: 999px;
+}
+.mi-schedule-note {
+  font-size: 11px;
+  color: var(--mi-sub);
+  margin: -6px 2px 10px;
+}
+.mi-schedule-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--mi-border-soft);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+.mi-schedule-form select,
+.mi-schedule-form input[type='time'] {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--mi-border);
+  border-radius: 8px;
+  background: var(--mi-surface-2);
+  color: var(--mi-text);
+}
+.mi-schedule-days { display: flex; gap: 4px; }
+.mi-schedule-days button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--mi-border);
+  font-size: 11px;
+  color: var(--mi-sub);
+}
+.mi-schedule-days button.on {
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
+  color: #fff;
+}
+.mi-schedule-save {
+  font-size: 14px;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: var(--mi-btn-bg);
+  color: #fff;
+}
+.mi-schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--mi-border-soft);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.mi-schedule-time { font-size: 20px; min-width: 64px; }
+.mi-schedule-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mi-schedule-info span {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-schedule-info em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--mi-sub);
+}
+.mi-schedule-del {
+  font-size: 12px;
+  color: var(--mi-danger);
+  padding: 4px 8px;
+}
 .mi-action-grid button:disabled { opacity: 0.45; }
 
 .mi-detail-msg {
-  font-size: 13px;
+  font-size: 14px;
   padding: 10px 14px;
-  border-radius: 10px;
-  background: #eef6ff;
-  color: var(--mi-blue);
+  border-radius: 12px;
+  background: var(--mi-info-bg);
+  color: var(--mi-blue-text);
   margin-bottom: 12px;
 }
 
@@ -653,14 +831,14 @@ button {
 }
 .mi-chart-col em {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--mi-sub);
   white-space: nowrap;
 }
 .mi-chart-bar {
   width: 70%;
   max-width: 34px;
-  border-radius: 6px 6px 0 0;
+  border-radius: 8px 8px 0 0;
   background: linear-gradient(180deg, #5b9cff, var(--mi-blue));
   min-height: 3px;
   /* 不动画 height（每帧重排）；改 scaleY 从底部生长（合成层） */
@@ -668,7 +846,7 @@ button {
   animation: bar-grow 0.48s var(--mi-ease-out) backwards;
 }
 .mi-chart-col span {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--mi-sub);
   white-space: nowrap;
 }
@@ -690,15 +868,15 @@ button {
   border: none;
   margin-left: 8px;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: 8px;
   vertical-align: middle;
 }
-.mi-rename-btn:hover { background: #f2f3f5; color: var(--mi-blue); }
+.mi-rename-btn:hover { background: #f2f3f5; color: var(--mi-blue-text); }
 .mi-theme-select {
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   background: transparent;
-  color: var(--mi-blue);
+  color: var(--mi-blue-text);
   border: 1px solid #e0e1e4;
   border-radius: 8px;
   padding: 4px 8px;
@@ -726,8 +904,8 @@ button {
   z-index: 2;
 }
 .mi-check.on {
-  background: var(--mi-blue);
-  border-color: var(--mi-blue);
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
 }
 .mi-card.checked {
   outline: 2px solid var(--mi-blue);
@@ -754,11 +932,11 @@ button {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
 .mi-batch-bar span {
-  font-size: 13px;
+  font-size: 14px;
   margin-right: auto;
 }
 .mi-batch-bar button {
-  font-size: 13px;
+  font-size: 14px;
   padding: 7px 16px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
@@ -775,11 +953,11 @@ button {
   border-radius: 999px;
   background: #d8d9dd;
   position: relative;
-  transition: background 0.2s;
+  transition: background 0.2s var(--mi-ease-out);
   border: none;
   padding: 0;
 }
-.mi-toggle.on { background: var(--mi-blue); }
+.mi-toggle.on { background: var(--mi-btn-bg); }
 .mi-toggle-knob {
   position: absolute;
   width: 22px;
@@ -790,7 +968,7 @@ button {
   left: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   /* 不动画 left（每帧重排）；位移用 transform（合成层） */
-  transition: transform 0.28s var(--mi-ease-page), box-shadow 0.2s;
+  transition: transform 0.28s var(--mi-ease-page);
 }
 .mi-toggle.on .mi-toggle-knob { transform: translateX(18px); }
 [data-theme='dark'] .mi-toggle { background: #3a3b40; }
@@ -808,7 +986,7 @@ button {
   align-items: center;
   justify-content: center;
   background: #f7f8fa;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
 }
 .mi-card-img img {
@@ -838,8 +1016,8 @@ button {
 
 /* 圆形电源按钮（对齐米家卡片右上角电源键） */
 .mi-power {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 50%;
   display: flex;
@@ -854,8 +1032,8 @@ button {
   padding: 0;
 }
 .mi-power.on {
-  background: var(--mi-blue);
-  border-color: var(--mi-blue);
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
   color: #fff;
   box-shadow: 0 2px 8px rgba(52, 130, 255, 0.35);
 }
@@ -865,7 +1043,7 @@ button {
 /* ===== 传感大数字卡（温湿度） ===== */
 .mi-card--sensor .mi-card-sensor { flex: 1; min-width: 0; }
 .mi-sensor-value {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 700;
   line-height: 1.15;
   color: var(--mi-text);
@@ -874,7 +1052,7 @@ button {
 }
 .mi-sensor-value em {
   font-style: normal;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--mi-sub);
   margin-left: 3px;
@@ -891,7 +1069,7 @@ button {
   text-overflow: ellipsis;
 }
 .mi-sensor-side {
-  color: var(--mi-blue);
+  color: var(--mi-blue-text);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -923,7 +1101,7 @@ button {
 .mi-card-detail {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.28s var(--mi-ease-out);
+  transition: grid-template-rows var(--mi-dur-expand) var(--mi-ease-out);
 }
 .mi-card-detail.is-open { grid-template-rows: 1fr; }
 .mi-card-detail-inner {
@@ -940,10 +1118,9 @@ button {
 }
 .mi-card-detail:not(.is-open) .mi-card-detail-inner {
   opacity: 0;
-  transition: opacity 0.12s;
-  /* 收起后不可聚焦/点不到 */
+  /* 收起后不可聚焦/点不到；visibility 延迟与 grid-rows 开合同一时长（同一令牌，不再手工同步） */
   visibility: hidden;
-  transition: opacity 0.12s, visibility 0s 0.28s;
+  transition: opacity 0.12s, visibility 0s var(--mi-dur-expand);
 }
 /* 大卡常显：无开合动画 */
 .mi-card--size-l .mi-card-detail { transition: none; }
@@ -962,7 +1139,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .mi-slider span {
   width: 64px;
@@ -985,7 +1162,7 @@ button {
 .mi-slider select {
   flex: 1;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   background: #f7f8fa;
   color: var(--mi-text);
   border: 1px solid #e5e6eb;
@@ -995,7 +1172,7 @@ button {
 .mi-readonly {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--mi-sub);
 }
 .mi-readonly b {
@@ -1014,7 +1191,7 @@ button {
   align-items: center;
   gap: 12px;
   background: var(--mi-card);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 14px 16px;
   box-shadow: var(--mi-shadow);
   font-size: 14px;
@@ -1025,7 +1202,7 @@ button {
   height: 32px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
   display: flex;
   align-items: center;
@@ -1060,8 +1237,8 @@ button {
   justify-content: center;
   font-size: 28px;
 }
-.mi-profile-name { font-size: 17px; font-weight: 700; }
-.mi-profile-sub { font-size: 13px; color: var(--mi-sub); margin-top: 4px; }
+.mi-profile-name { font-size: 16px; font-weight: 700; }
+.mi-profile-sub { font-size: 14px; color: var(--mi-sub); margin-top: 4px; }
 
 .mi-cell-list {
   background: var(--mi-card);
@@ -1084,7 +1261,7 @@ button {
 .mi-cell em {
   font-style: normal;
   color: var(--mi-sub);
-  font-size: 13px;
+  font-size: 14px;
 }
 .mi-cell-btn { justify-content: center; }
 .mi-cell-btn.danger { color: var(--mi-danger); }
@@ -1095,30 +1272,57 @@ button {
   margin-top: 18px;
 }
 
-/* ================= 底部导航 ================= */
-.mi-tabbar {
-  display: flex;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid #ececee;
-  padding: 6px 0 max(6px, env(safe-area-inset-bottom));
-}
-.mi-tabbar button {
-  flex: 1;
+/* ================= 侧边导航（桌面布局） ================= */
+.mi-sidebar {
+  width: 176px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+  background: rgba(255, 255, 255, 0.72);
+  border-right: 1px solid var(--mi-border-soft);
+}
+.mi-sidebar-brand {
+  display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
+  font-size: 16px;
+  padding: 6px 10px 16px;
+}
+.mi-sidebar-brand b { letter-spacing: 1px; }
+.mi-sidebar button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--mi-text);
+  transition: background-color 0.16s var(--mi-ease-out), color 0.16s var(--mi-ease-out),
+    transform 0.12s var(--mi-tap-ease);
+}
+.mi-sidebar button:active { transform: scale(0.97); }
+.mi-sidebar button:hover:not(.active) { background: rgba(52, 130, 255, 0.08); }
+.mi-sidebar button.active {
+  background: var(--mi-btn-bg);
+  color: #fff;
+  font-weight: 600;
+}
+.mi-side-icon { font-size: 18px; filter: grayscale(1); opacity: 0.7; }
+.mi-sidebar button.active .mi-side-icon { filter: none; opacity: 1; }
+.mi-sidebar-version {
+  margin-top: auto;
+  padding: 8px 12px;
   font-size: 11px;
   color: var(--mi-sub);
-  padding: 4px 0;
-  transition: color 0.15s;
 }
-.mi-tabbar button.active { color: var(--mi-blue); }
-.mi-tab-icon { font-size: 20px; filter: grayscale(1); opacity: 0.65; }
-.mi-tabbar button.active .mi-tab-icon {
-  filter: none;
-  opacity: 1;
+/* 主内容列：顶栏 + 内容纵向排列 */
+.mi-main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ============================================================
@@ -1129,8 +1333,18 @@ button {
   --mi-bg: rgba(23, 24, 26, 0.74);
   --mi-card: rgba(35, 36, 39, 0.78);
   --mi-text: #ececee;
-  --mi-sub: #8a8c92;
+  /* 次级文字：对深色卡片底约 4.8:1（AA） */
+  --mi-sub: #96989e;
   --mi-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  /* 文本蓝在深底提亮至约 5.4:1（AA）；蓝底白字沿用 #2569e6（4.95:1） */
+  --mi-blue-text: #6ea0ff;
+  --mi-placeholder: #8a8c92;
+  --mi-surface-2: #2a2b30;
+  --mi-border: #3a3b40;
+  --mi-border-soft: #2e2f33;
+  --mi-info-bg: rgba(52, 130, 255, 0.14);
+  /* 错误红提亮至约 5:1（AA） */
+  --mi-danger: #ff7875;
 }
 [data-theme='dark'] body {
   background:
@@ -1138,8 +1352,6 @@ button {
     radial-gradient(700px 500px at 110% 110%, rgba(120, 80, 220, 0.08), transparent 55%),
     #17181a;
 }
-[data-theme='dark'] .mi-icon-btn,
-[data-theme='dark'] .mi-rooms button,
 [data-theme='dark'] .mi-sort select,
 [data-theme='dark'] .mi-search-bar input {
   background-color: #232427;
@@ -1148,15 +1360,11 @@ button {
 [data-theme='dark'] .mi-sort select {
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23888'/%3E%3C/svg%3E");
 }
-[data-theme='dark'] .mi-rooms button { color: #b6b8bd; }
-[data-theme='dark'] .mi-rooms button.active {
-  background: var(--mi-blue);
-  color: #fff;
+[data-theme='dark'] .mi-sidebar {
+  background: rgba(35, 36, 39, 0.72);
+  border-right-color: var(--mi-border-soft);
 }
-[data-theme='dark'] .mi-tabbar {
-  background: rgba(35, 36, 39, 0.96);
-  border-top-color: #2e2f33;
-}
+[data-theme='dark'] .mi-sidebar button:hover:not(.active) { background: rgba(52, 130, 255, 0.14); }
 [data-theme='dark'] .mi-power {
   background: #2c2d31;
   border-color: #3a3b40;
@@ -1206,8 +1414,8 @@ button {
 }
 [data-theme='dark'] .mi-icon-btn:hover:not(:disabled) { background: #34353b; }
 [data-theme='dark'] .mi-icon-btn.active {
-  background: var(--mi-blue);
-  border-color: var(--mi-blue);
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
   color: #fff;
 }
 [data-theme='dark'] .mi-rooms button {
@@ -1216,8 +1424,8 @@ button {
   color: #c3c5cb;
 }
 [data-theme='dark'] .mi-rooms button.active {
-  background: var(--mi-blue);
-  border-color: var(--mi-blue);
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
   color: #fff;
 }
 [data-theme='dark'] .mi-power {
@@ -1226,8 +1434,8 @@ button {
   color: #a8aab0;
 }
 [data-theme='dark'] .mi-power.on {
-  background: var(--mi-blue);
-  border-color: var(--mi-blue);
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
   color: #fff;
 }
 [data-theme='dark'] .mi-size-picker button {
@@ -1236,8 +1444,8 @@ button {
   color: #c3c5cb;
 }
 [data-theme='dark'] .mi-size-picker button.active {
-  background: var(--mi-blue);
-  border-color: var(--mi-blue);
+  background: var(--mi-btn-bg);
+  border-color: var(--mi-btn-bg);
   color: #fff;
 }
 [data-theme='dark'] .mi-sort select {
@@ -1256,20 +1464,45 @@ button {
 [data-theme='dark'] .login-card {
   background: #232427;
 }
-[data-theme='dark'] .login-card h1,
-[data-theme='dark'] .login-hint { color: var(--mi-text); }
+[data-theme='dark'] .login-card h1 { color: var(--mi-text); }
 [data-theme='dark'] .login-hint { color: var(--mi-sub); }
 /* 二维码区域保持白底（扫码需要高对比） */
 [data-theme='dark'] .qr-box { background: #ffffff; }
 
+/* ===== 深色补漏：早期打补丁时遗漏与新增组件 ===== */
+[data-theme='dark'] .error-banner,
+[data-theme='dark'] .mi-error {
+  background: rgba(255, 120, 117, 0.12);
+  border-color: rgba(255, 120, 117, 0.35);
+}
+[data-theme='dark'] .boot-spinner {
+  border-color: #3a3b40;
+  border-top-color: var(--mi-blue);
+}
+[data-theme='dark'] .login-steps {
+  background: rgba(52, 130, 255, 0.12);
+}
+[data-theme='dark'] .mi-action-param {
+  border-color: var(--mi-border);
+}
+[data-theme='dark'] .mi-action-param select,
+[data-theme='dark'] .mi-action-param input {
+  border-color: var(--mi-border);
+  background: var(--mi-surface-2);
+  color: var(--mi-text);
+}
+[data-theme='dark'] .mi-detail-hidden-note {
+  border-color: var(--mi-border);
+  color: var(--mi-sub);
+}
+[data-theme='dark'] .mi-offline-banner {
+  background: rgba(52, 130, 255, 0.14);
+}
+[data-theme='dark'] .cp-item.armed .cp-sub { color: var(--mi-danger); }
+
 /* ============================================================
    动效基础（批次1 · 三专家方案）
    ============================================================ */
-@keyframes pill-pop {
-  0% { transform: scale(0.94); }
-  60% { transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
 @keyframes bar-grow {
   from { transform: scaleY(0); }
   to { transform: scaleY(1); }
@@ -1278,6 +1511,11 @@ button {
   from { opacity: 0; transform: translateY(-10px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-10px) scale(0.96); }
+}
+.mi-toast.closing { animation: toast-out 0.22s var(--mi-ease-in) forwards; }
 
 /* 全局按压反馈（只动 transform，不触发重排） */
 .mi-card:active:not([draggable='true']) {
@@ -1309,7 +1547,7 @@ button {
   max-width: min(520px, 86vw);
   padding: 10px 20px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   color: #fff;
   background: rgba(30, 31, 35, 0.92);
   backdrop-filter: blur(8px);
@@ -1330,21 +1568,38 @@ button {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    /* delay 也必须归零：backwards 填充会在 delay 期间把元素钉在 from 态
+       （错落入场会先透明几百 ms 再闪现，比不降级更糟） */
+    animation-delay: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* 系统要求减少透明度时，去掉页面内全部背景模糊（窗口级 Acrylic 由系统处理） */
+@media (prefers-reduced-transparency: reduce) {
+  .mi-toast,
+  .cp-panel {
+    backdrop-filter: none;
+    background: var(--mi-card);
   }
 }
 
 /* ============================================================
    批次3：页面转场 / 网格入场 / 浮层弹入
    ============================================================ */
-/* Tab 面板入场（main 带 key，切换时重挂载重放） */
+/* Tab 面板入场（main 带 key，切换时重挂载重放）。
+   只做透明度：.mi-content 是滚动容器，挂 transform 会临时提升合成层、
+   结束时销毁带来滚动条抖动/文字模糊风险 */
 .mi-content { animation: panel-fade 0.32s var(--mi-ease-page); }
 @keyframes panel-fade {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* 卡片网格 stagger 入场（cap 8 张，避免同时创建过多合成层） */
-.mi-grid .mi-card {
+/* 卡片网格 stagger 入场（cap 8 张，避免同时创建过多合成层）。
+   仅挂载后短时携带 .mi-card--enter 才播：防止排序重排 / 轮询导致 --card-i 变化
+   时 animation-delay 改变触发重放（动效应由用户意图驱动，而非数据心跳） */
+.mi-grid .mi-card.mi-card--enter {
   animation: card-in 0.36s var(--mi-ease-out) backwards;
   animation-delay: calc(min(var(--card-i, 0), 8) * 40ms);
 }
@@ -1360,19 +1615,14 @@ button {
   to { opacity: 1; transform: none; }
 }
 
-/* 批量浮条弹入（米家轻弹） */
-.mi-batch-bar { animation: bar-in 0.32s var(--mi-ease-spring); }
+/* 批量浮条弹入（去掉弹簧过冲：回弹是炫技指纹，官方风格不做） */
+.mi-batch-bar { animation: bar-in 0.32s var(--mi-ease-out); }
 @keyframes bar-in {
   from { opacity: 0; transform: translateY(16px) scale(0.92); }
   to { opacity: 1; transform: none; }
 }
 
-/* 勾选角标弹入 + 选中描边（box-shadow 可平滑过渡，outline 不可） */
-.mi-check.on { animation: check-pop 0.26s var(--mi-ease-spring); }
-@keyframes check-pop {
-  from { transform: scale(0); }
-  to { transform: scale(1); }
-}
+/* 勾选角标 + 选中描边（box-shadow 可平滑过渡，outline 不可；勾选状态由颜色表达，无弹入动画） */
 .mi-card.checked {
   outline: none;
   box-shadow: 0 0 0 2px var(--mi-blue), var(--mi-shadow);
@@ -1420,11 +1670,11 @@ button {
   font-size: 12px;
   padding: 5px 16px;
   border-radius: 999px;
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
   border: none;
 }
-.mi-cell-mini-btn:hover:not(:disabled) { background: var(--mi-blue-dark); }
+.mi-cell-mini-btn:hover:not(:disabled) { background: var(--mi-btn-bg-hover); }
 
 /* 场景执行中状态（防重复触发反馈） */
 .mi-scene-item.running { opacity: 0.65; cursor: progress; }
@@ -1465,7 +1715,7 @@ button:focus:not(:focus-visible) { outline: none; }
   transition: background-color 0.15s var(--mi-ease-out), color 0.15s var(--mi-ease-out);
 }
 .mi-edit-modes button.active {
-  background: var(--mi-blue);
+  background: var(--mi-btn-bg);
   color: #fff;
 }
 [data-theme='dark'] .mi-edit-modes button { color: #c3c5cb; }
@@ -1489,7 +1739,7 @@ button:focus:not(:focus-visible) { outline: none; }
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(24px) saturate(150%);
   border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
   overflow: hidden;
   animation: cp-in 0.26s var(--mi-ease-page);
@@ -1501,28 +1751,34 @@ button:focus:not(:focus-visible) { outline: none; }
   from { opacity: 0; transform: translateY(-14px) scale(0.97); }
   to { opacity: 1; transform: none; }
 }
+@keyframes cp-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-14px) scale(0.97); }
+}
+.cp-overlay.closing .cp-panel { animation: cp-out 0.2s var(--mi-ease-in) forwards; }
 .cp-input {
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   padding: 16px 18px;
   border: none;
-  outline: none;
   background: transparent;
   color: var(--mi-text);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
-.cp-input::placeholder { color: #aaa; }
+.cp-input::placeholder { color: var(--mi-placeholder); }
+/* 场景两段确认：就绪态用警示色提示“再按 Enter 确认执行” */
+.cp-item.armed .cp-sub { color: var(--mi-danger); font-weight: 600; }
 .cp-list {
   overflow-y: auto;
   padding: 8px;
   min-height: 80px;
 }
 .cp-list::-webkit-scrollbar { width: 6px; }
-.cp-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 3px; }
+.cp-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 8px; }
 .cp-empty {
   text-align: center;
   color: var(--mi-sub);
-  font-size: 13px;
+  font-size: 14px;
   padding: 26px 0;
 }
 .cp-item {
@@ -1530,7 +1786,7 @@ button:focus:not(:focus-visible) { outline: none; }
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 14px;
 }

@@ -4,10 +4,11 @@ import { applyTheme } from './api/prefs';
 import { schedulePropsFetch } from './api/propsStore';
 import { initTrayEvents, syncTrayScenes } from './api/tray';
 import { notify } from './api/notify';
+import { dueSchedules, markRan } from './api/schedule';
 import { log } from './api/log';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
-import { ToastHost } from './components/Toast';
+import { toast, ToastHost } from './components/Toast';
 import './App.css';
 
 export default function App() {
@@ -17,6 +18,34 @@ export default function App() {
   useEffect(() => {
     init();
   }, [init]);
+
+  // 本地定时任务引擎：每 30 秒检查到点任务并执行场景（托盘常驻时同样生效）
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const check = () => {
+      for (const { schedule: s, runKey } of dueSchedules()) {
+        const { api } = useApp.getState();
+        api
+          .runScene(s.sceneId, s.homeId)
+          .then(() => {
+            markRan(s.id, runKey);
+            toast(`定时任务「${s.sceneName}」已执行`, 'ok');
+            notify('定时场景已执行', `「${s.sceneName}」按计划于 ${s.time} 执行`);
+            log('定时任务执行成功', s.sceneName, runKey);
+          })
+          .catch((e) => {
+            // 失败也标记，避免同一分钟反复重试轰炸
+            markRan(s.id, runKey);
+            const msg = e instanceof Error ? e.message : String(e);
+            toast(`定时任务「${s.sceneName}」执行失败: ${msg}`, 'err');
+            log('定时任务执行失败', s.sceneName, msg);
+          });
+      }
+    };
+    check();
+    const timer = window.setInterval(check, 30000);
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   // 主题：应用偏好并跟随系统变化（auto 模式）
   useEffect(() => {

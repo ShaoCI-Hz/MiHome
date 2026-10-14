@@ -6,6 +6,8 @@ interface ToastItem {
   id: number;
   text: string;
   kind: ToastKind;
+  /** 退场中（播 out 动画后真正移除，避免闪现消失） */
+  closing?: boolean;
 }
 
 let listeners: ((t: ToastItem) => void)[] = [];
@@ -24,7 +26,11 @@ export function ToastHost() {
     const onToast = (t: ToastItem) => {
       setItems((prev) => [...prev, t]);
       window.setTimeout(() => {
-        setItems((prev) => prev.filter((x) => x.id !== t.id));
+        // 先播 220ms 退场动画，再真正移除
+        setItems((prev) => prev.map((x) => (x.id === t.id ? { ...x, closing: true } : x)));
+        window.setTimeout(() => {
+          setItems((prev) => prev.filter((x) => x.id !== t.id));
+        }, 220);
       }, 2600);
     };
     listeners.push(onToast);
@@ -37,7 +43,7 @@ export function ToastHost() {
   return (
     <div className="mi-toast-host" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`mi-toast mi-toast--${t.kind}`}>{t.text}</div>
+        <div key={t.id} className={`mi-toast mi-toast--${t.kind} ${t.closing ? 'closing' : ''}`}>{t.text}</div>
       ))}
     </div>
   );

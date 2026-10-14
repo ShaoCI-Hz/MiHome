@@ -118,9 +118,13 @@ export class MiApiError extends Error {
   }
 }
 
-/** 登录错误 */
+/** 登录错误。expired=true 表示凭据确实失效需重新扫码；false 表示探测/刷新失败（可能只是网络问题） */
 export class MiLoginError extends Error {
-  constructor(public code: number, message: string) {
+  constructor(
+    public code: number,
+    message: string,
+    public expired = false,
+  ) {
     super(`code: ${code}, message: ${message}`);
     this.name = 'MiLoginError';
   }

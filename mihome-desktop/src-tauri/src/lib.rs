@@ -1,40 +1,119 @@
 use serde::{Deserialize, Serialize};
 
-/// 凭据条目在系统凭据管理器中的标识
-const KEYRING_SERVICE: &str = "mihome-desktop";
-const KEYRING_ACCOUNT: &str = "xiaomi-auth";
+/// 凭据存储：DPAPI（CryptProtectData）加密后落本地文件。
+/// 弃用凭据管理器原因：本机（Win11 25H2 build 26300）CredWrite 对超过 ~20 字符的
+/// blob 报 ERROR_NOT_ENOUGH_MEMORY(8)（cmdkey 与 keyring 交叉验证均为系统层故障）。
+/// DPAPI 是 Windows 凭据管理器底层同一套用户级加密，安全等级不打折且无大小限制。
+const AUTH_FILE_MARKER: &str = "mihome-desktop";
+
+fn auth_file_path() -> Result<std::path::PathBuf, String> {
+    let base = std::env::var("APPDATA").map_err(|_| "APPDATA 环境变量不存在".to_string())?;
+    let dir = std::path::Path::new(&base).join(AUTH_FILE_MARKER);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建凭据目录失败: {e}"))?;
+    Ok(dir.join("auth.bin"))
+}
+
+/// DPAPI 加密（当前用户作用域，CRYPTPROTECT_UI_FORBIDDEN）
+fn dpapi_encrypt(plain: &[u8]) -> Result<Vec<u8>, String> {
+    use windows_sys::Win32::Security::Cryptography::{
+        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    };
+    unsafe {
+        let in_blob = CRYPT_INTEGER_BLOB {
+            cbData: plain.len() as u32,
+            pbData: plain.as_ptr() as *mut u8,
+        };
+        let mut out_blob = CRYPT_INTEGER_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
+        let ok = CryptProtectData(
+            &in_blob,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut out_blob,
+        );
+        if ok == 0 {
+            return Err("CryptProtectData 失败".to_string());
+        }
+        let slice = std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize);
+        let out = slice.to_vec();
+        windows_sys::Win32::Foundation::LocalFree(out_blob.pbData as _);
+        Ok(out)
+    }
+}
+
+/// DPAPI 解密
+fn dpapi_decrypt(cipher: &[u8]) -> Result<Vec<u8>, String> {
+    use windows_sys::Win32::Security::Cryptography::{
+        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    };
+    unsafe {
+        let in_blob = CRYPT_INTEGER_BLOB {
+            cbData: cipher.len() as u32,
+            pbData: cipher.as_ptr() as *mut u8,
+        };
+        let mut out_blob = CRYPT_INTEGER_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
+        let ok = CryptUnprotectData(
+            &in_blob,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut out_blob,
+        );
+        if ok == 0 {
+            return Err("CryptUnprotectData 失败（可能被其他用户加密）".to_string());
+        }
+        let slice = std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize);
+        let out = slice.to_vec();
+        windows_sys::Win32::Foundation::LocalFree(out_blob.pbData as _);
+        Ok(out)
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthPayload {
     pub data: String,
 }
 
-/// 保存认证数据到 Windows 凭据管理器（加密存储）
+/// 保存认证数据（DPAPI 加密落盘）
 #[tauri::command]
 fn save_auth(payload: AuthPayload) -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|e| e.to_string())?;
-    entry.set_password(&payload.data).map_err(|e| e.to_string())
+    let cipher = dpapi_encrypt(payload.data.as_bytes())?;
+    let path = auth_file_path()?;
+    std::fs::write(&path, &cipher).map_err(|e| format!("写凭据文件失败: {e}"))
 }
 
 /// 读取认证数据；不存在时返回 None
 #[tauri::command]
 fn load_auth() -> Result<Option<String>, String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(p) => Ok(Some(p)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
+    let path = auth_file_path()?;
+    let cipher = match std::fs::read(&path) {
+        Ok(c) => c,
+        Err(_) => return Ok(None),
+    };
+    let plain = dpapi_decrypt(&cipher)?;
+    String::from_utf8(plain)
+        .map(Some)
+        .map_err(|_| "凭据内容不是有效 UTF-8".to_string())
 }
 
 /// 删除认证数据（退出登录）
 #[tauri::command]
 fn delete_auth() -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
+    let path = auth_file_path()?;
+    match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("删凭据文件失败: {e}")),
     }
 }
 

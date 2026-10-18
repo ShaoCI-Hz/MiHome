@@ -18,6 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# DPAPI 加密存凭据：本机凭据管理器对稍长 blob 报 ERROR_NOT_ENOUGH_MEMORY（系统故障），改用 DPAPI 加密文件
+windows-sys = { version = "0.52", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
@@ -27,8 +29,8 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# 凭据存入操作系统凭据管理器（Windows Credential Manager），不落明文
-keyring = { version = "3", features = ["windows-native"] }
+# 凭据以 DPAPI（CryptProtectData）加密落盘 %APPDATA%/mihome-desktop/auth.bin，不落明文。
+# 弃用凭据管理器：部分 Win11 24H2/25H2 系统 CredWrite 对稍长 blob 误报 ERROR_NOT_ENOUGH_MEMORY(8)
 # 登录回调需读取 Set-Cookie（JS 侧被浏览器规范过滤），用 reqwest 在 Rust 侧完成
 reqwest = { version = "0.12", features = ["gzip"] }
 # 窗口毛玻璃（Win11 Mica / Win10 Acrylic）
